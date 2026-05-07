@@ -5,6 +5,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const MAX_CHARACTERS = 10;
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
+    const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
     const ROUTE_MENU_HASH = '#characters';
@@ -5321,6 +5322,10 @@ ${getCleanFeatType(slot.type)}`;
         const nickname = normalizeAccountNickname(input?.value || '');
         if (!nickname) {
             alert('Введите имя аккаунта.');
+            return;
+        }
+        if (nickname.length > ACCOUNT_NICKNAME_MAX_LENGTH) {
+            alert(`Имя аккаунта должно быть не длиннее ${ACCOUNT_NICKNAME_MAX_LENGTH} символов.`);
             return;
         }
         setCloudSyncStatus('Проверяю имя аккаунта...');

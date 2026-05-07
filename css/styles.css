@@ -1149,3 +1149,51 @@
         font-size: 10px !important;
     }
 }
+
+/* 1.01h: keep the JSON upload/delete button fixed while cloud status appears */
+.character-menu-toolbar {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    overflow: hidden;
+}
+.character-count {
+    flex: 0 0 auto !important;
+    position: relative;
+    z-index: 2;
+}
+.character-toolbar-actions {
+    flex: 0 0 auto !important;
+    margin-left: auto !important;
+    position: relative;
+    z-index: 2;
+}
+.account-toolbar-status {
+    position: absolute !important;
+    left: 92px;
+    right: 76px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 18px !important;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block !important;
+    justify-self: auto !important;
+}
+.account-toolbar-status.loading {
+    display: flex !important;
+}
+@media (max-width: 520px) {
+    .account-toolbar-status {
+        left: 68px;
+        right: 58px;
+        min-height: 16px !important;
+        max-width: none !important;
+    }
+}

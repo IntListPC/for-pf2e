@@ -5269,32 +5269,85 @@ ${getCleanFeatType(slot.type)}`;
         }
     }
 
+    function getSupabaseRestHeaders(extra = {}) {
+        return {
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...extra
+        };
+    }
+
+    async function supabaseRest(path, options = {}, action = 'Supabase') {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timerId = controller ? setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS) : null;
+
+        try {
+            const response = await fetch(`${SUPABASE_URL}${path}`, {
+                ...options,
+                signal: controller?.signal,
+                headers: getSupabaseRestHeaders(options.headers || {})
+            });
+
+            const text = await response.text();
+            let body = null;
+            try {
+                body = text ? JSON.parse(text) : null;
+            } catch {
+                body = text;
+            }
+
+            if (!response.ok) {
+                const message = typeof body === 'object' && body
+                    ? (body.message || body.details || body.hint || `${response.status} ${response.statusText}`)
+                    : (body || `${response.status} ${response.statusText}`);
+                return { data: null, error: { message } };
+            }
+
+            return { data: body, error: null };
+        } catch (error) {
+            return {
+                data: null,
+                error: {
+                    message: error?.name === 'AbortError'
+                        ? getCloudTimeoutMessage(action)
+                        : (error?.message || String(error || 'ошибка сети'))
+                }
+            };
+        } finally {
+            if (timerId) clearTimeout(timerId);
+        }
+    }
+
     async function initSupabase() {
         cloudUser = readAccountProfile();
         updateAccountUI();
-        if (!window.supabase?.createClient) {
-            updateCloudAuthUI('Supabase недоступен, облако выключено');
-            return;
+        if (window.supabase?.createClient) {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+                auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+            });
+        } else {
+            supabaseClient = null;
         }
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-        });
         updateAccountUI();
-        if (cloudUser) await syncAccountProfileFromCloud(false);
+        if (cloudUser) {
+            syncAccountProfileFromCloud(false).catch(error => {
+                console.warn('Cloud profile background sync error', error);
+            });
+        }
     }
 
     async function fetchAccountBackupRow() {
-        if (!supabaseClient || !cloudUser) return { data: null, error: null };
+        if (!cloudUser) return { data: null, error: null };
         const nicknameKey = accountStorageKey(cloudUser.nickname);
-        return withCloudTimeout(supabaseClient
-            .from('account_backups')
-            .select('data,profile_avatar,updated_at')
-            .eq('nickname_key', nicknameKey)
-            .maybeSingle(), 'Загрузка профиля');
+        const path = `/rest/v1/account_backups?select=data,profile_avatar,updated_at&nickname_key=eq.${encodeURIComponent(nicknameKey)}&limit=1`;
+        const { data, error } = await supabaseRest(path, { method: 'GET' }, 'Загрузка профиля');
+        return { data: Array.isArray(data) ? (data[0] || null) : data, error };
     }
 
     async function syncAccountProfileFromCloud(showMessage = true) {
-        if (!cloudUser || !supabaseClient) return;
+        if (!cloudUser) return;
         if (showMessage) setCloudSyncStatus('Проверяю профиль в облаке...');
         const { data: row, error } = await fetchAccountBackupRow();
         if (error) {
@@ -5340,8 +5393,8 @@ ${getCleanFeatType(slot.type)}`;
 
     async function saveAccountToCloud() {
         if (!requireNicknameAccount()) return;
-        if (!supabaseClient) {
-            updateCloudAuthUI('Supabase недоступен, сохранить в облако не удалось');
+        if (typeof fetch !== 'function') {
+            updateCloudAuthUI('Fetch недоступен, сохранить в облако не удалось');
             return;
         }
         const snapshot = buildAccountSnapshot();
@@ -5354,10 +5407,15 @@ ${getCleanFeatType(slot.type)}`;
             data: snapshot,
             updated_at: new Date().toISOString()
         };
-        const { data: savedRows, error } = await withCloudTimeout(supabaseClient
-            .from('account_backups')
-            .upsert(payload, { onConflict: 'nickname_key' })
-            .select('nickname_key,updated_at'), 'Сохранение в облако');
+        const { data: savedRows, error } = await supabaseRest(
+            '/rest/v1/account_backups?on_conflict=nickname_key',
+            {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify(payload)
+            },
+            'Сохранение в облако'
+        );
         if (error) {
             console.warn('Cloud account save error', error);
             updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
@@ -5373,8 +5431,8 @@ ${getCleanFeatType(slot.type)}`;
 
     async function requestLoadAccountFromCloud() {
         if (!requireNicknameAccount()) return;
-        if (!supabaseClient) {
-            updateCloudAuthUI('Supabase недоступен, загрузить облако не удалось');
+        if (typeof fetch !== 'function') {
+            updateCloudAuthUI('Fetch недоступен, загрузить облако не удалось');
             return;
         }
         setCloudSyncStatus('Ищу данные в облаке...');

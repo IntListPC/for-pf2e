@@ -1041,3 +1041,46 @@
     .character-add-avatar::before { width: 28px; height: 4px; }
     .character-add-avatar::after { width: 4px; height: 28px; }
 }
+
+
+/* 1.01e: force old Inter level numerals and stable add-card plus */
+#disp-lvl,
+#personality-level,
+.stat-badge.lvl-main .v {
+    font-family: "Inter", sans-serif !important;
+    font-weight: 900 !important;
+    font-variant-numeric: normal !important;
+    font-feature-settings: "tnum" 0, "lnum" 1 !important;
+    letter-spacing: -0.035em;
+    text-rendering: geometricPrecision;
+}
+.stat-badge.lvl-main {
+    align-items: center;
+}
+.character-add-avatar {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+    color: var(--text-dim);
+}
+.character-add-avatar::before,
+.character-add-avatar::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    display: block !important;
+    border-radius: 999px !important;
+    background: currentColor !important;
+    transform: translate(-50%, -50%) !important;
+}
+.character-add-avatar::before { width: 30px !important; height: 4px !important; }
+.character-add-avatar::after { width: 4px !important; height: 30px !important; }
+@media (max-width: 520px) {
+    .character-add-avatar::before { width: 28px !important; height: 4px !important; }
+    .character-add-avatar::after { width: 4px !important; height: 28px !important; }
+}

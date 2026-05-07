@@ -53,7 +53,7 @@
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.0a-7<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01<br>by RubiDus</div>
     </div>
 </div>
 
@@ -65,12 +65,12 @@
         <div id="account-nickname-label" class="account-nickname-label">Локальный профиль</div>
         <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
 
-        <label class="account-sync-toggle" for="account-auto-sync-toggle">
+        <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
             <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
             <span><b>Автосинхронизация</b><small>Сохранять облако при выходе в главное меню</small></span>
         </label>
 
-        <div class="account-menu-actions">
+        <div id="account-menu-actions" class="account-menu-actions">
             <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
             <button type="button" onclick="openAccountLoginForm()" class="btn-sec">ВОЙТИ В АККАУНТ</button>
         </div>
@@ -1001,7 +1001,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.0a-7"></script>
+<script src="js/app.js?v=1.01"></script>
 
 <div class="footer-spacer"></div>
 </body>

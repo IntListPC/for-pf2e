@@ -5159,8 +5159,20 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function getAccountDefaultInfo(profile = cloudUser || readAccountProfile()) {
-        if (!profile) return 'Локальное сохранение · облако выключено';
-        return `Yandex Cloud · автосинхронизация ${profile.autoSync ? 'включена' : 'выключена'}`;
+        return '';
+    }
+
+    function isAccountErrorMessage(message = '') {
+        const text = String(message || '').trim().toLowerCase();
+        if (!text) return false;
+        return /не удалось|ошиб|не найден|существует|сначала|проверь|не ответил|нет данных|не подтвердило|недоступен|отказ|forbidden|failed|error/i.test(text);
+    }
+
+    function setOptionalAccountText(el, text = '') {
+        if (!el) return;
+        const clean = String(text || '').trim();
+        el.innerText = clean;
+        el.style.display = clean ? '' : 'none';
     }
 
     function updateAccountSummary(message = '') {
@@ -5170,12 +5182,12 @@ ${getCleanFeatType(slot.type)}`;
         const modalInfo = document.getElementById('account-modal-info');
         const authStatus = document.getElementById('cloud-auth-status');
         const syncStatus = document.getElementById('cloud-sync-status');
-        const text = message || getAccountDefaultInfo(profile);
+        const errorText = isAccountErrorMessage(message) ? String(message || '').trim() : '';
         if (headerName) headerName.innerText = profile?.nickname || 'Локальный профиль';
-        if (headerMeta) headerMeta.innerText = text;
-        if (modalInfo) modalInfo.innerText = text;
+        setOptionalAccountText(headerMeta, errorText);
+        setOptionalAccountText(modalInfo, errorText);
         if (authStatus) authStatus.innerText = profile ? `Аккаунт: ${profile.nickname}` : 'Локальный профиль';
-        if (syncStatus) syncStatus.innerText = text;
+        if (syncStatus) syncStatus.innerText = errorText;
     }
 
     function setAccountView(view = 'menu') {
@@ -5203,24 +5215,29 @@ ${getCleanFeatType(slot.type)}`;
     function updateAccountUI(message = '') {
         const profile = cloudUser || readAccountProfile();
         if (profile && !cloudUser) cloudUser = profile;
+        const loggedIn = !!profile;
         const icon = document.getElementById('profile-icon-img');
         const avatarPreview = document.getElementById('account-avatar-img');
         const nicknameLabel = document.getElementById('account-nickname-label');
         const actions = document.getElementById('cloud-action-buttons');
         const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
+        const autoSyncWrap = document.getElementById('account-auto-sync-wrap');
+        const menuActions = document.getElementById('account-menu-actions');
         const avatarChangeBtn = document.getElementById('account-avatar-change-btn');
         const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
         if (avatarPreview) avatarPreview.src = avatar;
         if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || 'Локальный профиль';
-        if (actions) actions.classList.toggle('active', !!profile);
+        if (actions) actions.classList.toggle('active', loggedIn);
         if (autoSyncToggle) {
             autoSyncToggle.checked = !!profile?.autoSync;
-            autoSyncToggle.disabled = !profile;
+            autoSyncToggle.disabled = !loggedIn;
         }
-        if (avatarChangeBtn) avatarChangeBtn.style.display = profile ? '' : 'none';
-        if (logoutBtn) logoutBtn.style.display = profile ? '' : 'none';
+        if (autoSyncWrap) autoSyncWrap.style.display = loggedIn ? 'flex' : 'none';
+        if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
+        if (avatarChangeBtn) avatarChangeBtn.style.display = loggedIn ? '' : 'none';
+        if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
         updateAccountSummary(message);
     }
 
@@ -5267,7 +5284,7 @@ ${getCleanFeatType(slot.type)}`;
         if (input) input.value = '';
         showAccountMenuView();
         const saved = await saveAccountToCloud({ accountCreated: true });
-        if (saved) updateAccountUI('Аккаунт создан. Автосинхронизация выключена.');
+        if (saved) updateAccountUI();
     }
 
     async function loginExistingNicknameAccount() {
@@ -5303,7 +5320,7 @@ ${getCleanFeatType(slot.type)}`;
         if (input) input.value = '';
         showAccountMenuView();
         closeModal('accountModal');
-        updateAccountUI('Аккаунт открыт. Загрузка данных — вручную через ☁↓.');
+        updateAccountUI();
     }
 
     async function loginNicknameAccount() {
@@ -5313,7 +5330,7 @@ ${getCleanFeatType(slot.type)}`;
     function logoutNicknameAccount() {
         cloudUser = null;
         writeAccountProfile(null);
-        updateAccountUI('Аккаунт закрыт');
+        updateAccountUI();
         showAccountMenuView();
     }
 
@@ -5325,7 +5342,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         cloudUser.autoSync = !!checked;
         writeAccountProfile(cloudUser);
-        updateAccountUI(cloudUser.autoSync ? 'Автосинхронизация включена' : 'Автосинхронизация выключена');
+        updateAccountUI();
     }
 
     function isAccountAutoSyncEnabled() {
@@ -5356,7 +5373,7 @@ ${getCleanFeatType(slot.type)}`;
                 ctx.drawImage(img, ((img.naturalWidth || img.width) - size) / 2, ((img.naturalHeight || img.height) - size) / 2, size, size, 0, 0, 512, 512);
                 cloudUser.avatar = canvas.toDataURL('image/jpeg', 0.86);
                 writeAccountProfile(cloudUser);
-                updateAccountUI('Аватарка профиля обновлена');
+                updateAccountUI();
                 input.value = '';
             };
             img.src = e.target.result;
@@ -5440,7 +5457,7 @@ ${getCleanFeatType(slot.type)}`;
 
     async function initCloud() {
         cloudUser = readAccountProfile();
-        updateAccountUI(cloudUser ? '' : 'Локальное сохранение · создай аккаунт или войди');
+        updateAccountUI();
     }
 
     async function fetchAccountBackupRow() {
@@ -5464,7 +5481,7 @@ ${getCleanFeatType(slot.type)}`;
             writeAccountProfile(cloudUser);
             updateAccountUI(showMessage ? 'Профиль загружен из облака' : '');
         } else if (showMessage) {
-            updateAccountUI('Профиль открыт');
+            updateAccountUI();
         } else {
             updateAccountUI();
         }
@@ -5521,7 +5538,7 @@ ${getCleanFeatType(slot.type)}`;
                 updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
                 return false;
             }
-            updateCloudAuthUI(options.auto ? 'Автосохранение выполнено' : (options.accountCreated ? 'Аккаунт создан и сохранён' : `Сохранено в облако: ${savedRow.nickname_key || nicknameKey}`));
+            updateCloudAuthUI();
             return true;
         } finally {
             cloudLoading = false;

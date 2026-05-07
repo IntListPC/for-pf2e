@@ -843,7 +843,7 @@
 
         .lore-row { margin-bottom: 8px; }
         .footer-spacer { height: 120px; }
-        .character-menu { position: fixed; inset: 0; z-index: 8000; background: var(--bg); display: none; overflow-y: auto; padding: 0 14px 100px; }
+        .character-menu { position: fixed; inset: 0; z-index: 8000; background: #20232c; display: none; overflow-y: auto; padding: 0 14px 100px; }
         body.main-menu-open .character-menu { display: block; }
         body.main-menu-open .fixed-header, body.main-menu-open .layout-container, body.main-menu-open .footer-spacer { display: none; }
         .character-menu-inner { width: 100%; max-width: 1120px; margin: 0 auto; }

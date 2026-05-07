@@ -4,7 +4,7 @@
             --text: #ffffff; --text-dim: #94a3b8; --border: #334155; 
             --input-bg: #0f172a; --hp-green: #10b981; --hp-gold: #fbbf24; --hp-red: #ef4444;
             --shield-blue: #3b82f6;
-            --font-main: Roboto, "Noto Sans", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-main: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             --header-height: auto;
             --max-width: 1200px;
         }
@@ -1013,3 +1013,31 @@
             .character-menu-btn { width: 42px; height: 42px; border-radius: 14px; }
             .character-add-avatar { font-size: 45px; padding-bottom: 5px; }
         }
+
+
+/* 1.01d: stable Inter font and CSS-drawn add-card plus */
+.character-add-avatar {
+    position: relative;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+    color: var(--text-dim);
+}
+.character-add-avatar::before,
+.character-add-avatar::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: block;
+    border-radius: 999px;
+    background: currentColor;
+    transform: translate(-50%, -50%);
+}
+.character-add-avatar::before { width: 31px; height: 5px; }
+.character-add-avatar::after { width: 5px; height: 31px; }
+.character-add-card:hover .character-add-avatar { color: #ffffff; }
+@media (max-width: 520px) {
+    .character-add-avatar::before { width: 28px; height: 4px; }
+    .character-add-avatar::after { width: 4px; height: 28px; }
+}

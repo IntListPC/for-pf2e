@@ -5048,11 +5048,26 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function readCharacterSheet(id) {
-        return readStorageJSONWithBackup(characterSheetKey(id), null);
+        const key = characterSheetKey(id);
+        const sheet = readStorageJSONWithBackup(key, null);
+        if (sheet && sheet._characterId && String(sheet._characterId) !== String(id)) {
+            const backup = parseStorageJSON(localStorage.getItem(storageBackupKey(key)), null);
+            if (backup && (!backup._characterId || String(backup._characterId) === String(id))) {
+                console.warn('Восстановлен лист персонажа из резервной копии из-за несовпадения id', id);
+                safeStorageSet(key, JSON.stringify({ ...backup, _characterId: String(id) }), false);
+                return { ...backup, _characterId: String(id) };
+            }
+            console.warn('Лист персонажа пропущен из-за несовпадения id', id, sheet._characterId);
+            return null;
+        }
+        return sheet;
     }
 
     function writeCharacterSheet(id, sheet) {
-        const ok = safeStorageSet(characterSheetKey(id), JSON.stringify(sheet));
+        const safeSheet = sheet && typeof sheet === 'object'
+            ? { ...sheet, _characterId: String(id), [LOCAL_SHEET_UPDATED_AT_KEY]: Number(sheet[LOCAL_SHEET_UPDATED_AT_KEY] || Date.now()) }
+            : sheet;
+        const ok = safeStorageSet(characterSheetKey(id), JSON.stringify(safeSheet));
         if (!ok) showStorageErrorOnce('Не удалось сохранить лист: хранилище браузера заполнено. Экспортируй персонажа в JSON или освободи место.');
         return ok;
     }
@@ -5861,6 +5876,7 @@ ${getCleanFeatType(slot.type)}`;
         const ids = new Set();
         document.querySelectorAll('input, select, textarea').forEach(el => {
             if (!el.id || el.type === 'file' || ids.has(el.id)) return;
+            if (el.closest('#characterMenu, #accountModal, #cloudConfirmModal')) return;
             ids.add(el.id);
             s[el.id] = getFieldValue(el.id);
         });
@@ -5910,14 +5926,34 @@ ${getCleanFeatType(slot.type)}`;
         return 'hp-good';
     }
 
-    function updateActiveCharacterMeta(s = null) {
-        if (!activeCharacterId) return;
-        const idx = characters.findIndex(c => String(c.id) === String(activeCharacterId));
+    function updateCharacterMetaById(id, s = null) {
+        if (!id) return;
+        const idx = characters.findIndex(c => String(c.id) === String(id));
         if (idx < 0) return;
-        const sheet = s || captureSheetState();
+        const sheet = s || readCharacterSheet(id) || (String(id) === String(activeCharacterId) ? captureSheetState() : null);
+        if (!sheet) return;
         const { avatar, ...rest } = characters[idx];
         characters[idx] = { ...rest, ...getCharacterMetaFromSheet(sheet) };
         writeCharacters();
+    }
+
+    function updateActiveCharacterMeta(s = null) {
+        updateCharacterMetaById(activeCharacterId, s);
+    }
+
+    function saveCharacterSnapshotById(id, shouldCalculate = false) {
+        if (isLoadingSheet || !id) return null;
+        const lvlEl = getPreferredField('in-lvl');
+        if (lvlEl) setFieldValueAll('in-lvl', clampLevel(lvlEl.value));
+        const s = captureSheetState();
+        s._characterId = String(id);
+        s[LOCAL_SHEET_UPDATED_AT_KEY] = Date.now();
+        if (writeCharacterSheet(id, s)) {
+            updateCharacterMetaById(id, s);
+            if (String(id) === String(activeCharacterId)) scheduleCloudSave(s);
+        }
+        if (shouldCalculate) calculate();
+        return s;
     }
 
     function migrateCharacterStorage() {
@@ -6108,9 +6144,10 @@ ${getCleanFeatType(slot.type)}`;
 
     async function openCharacterMenu(options = {}) {
         const { fromRoute = false, replaceRoute = false } = options || {};
-        const shouldAutoSaveOnMenu = !!activeCharacterId && !document.body.classList.contains('main-menu-open');
-        if (activeCharacterId) {
-            saveAll(false);
+        const leavingCharacterId = activeCharacterId;
+        const shouldAutoSaveOnMenu = !!leavingCharacterId && !document.body.classList.contains('main-menu-open');
+        if (leavingCharacterId) {
+            saveCharacterSnapshotById(leavingCharacterId, false);
             await flushCloudSave();
         }
         characterDeleteSelectMode = characterPendingDeleteIds.size > 0;
@@ -6187,8 +6224,9 @@ ${getCleanFeatType(slot.type)}`;
             await openCharacterMenu({ fromRoute: true });
             return;
         }
-        if (activeCharacterId && String(activeCharacterId) !== String(id)) {
-            saveAll(false);
+        const previousCharacterId = activeCharacterId;
+        if (previousCharacterId && String(previousCharacterId) !== String(id)) {
+            saveCharacterSnapshotById(previousCharacterId, false);
             await flushCloudSave();
         }
         activeCharacterId = id;
@@ -6253,15 +6291,9 @@ ${getCleanFeatType(slot.type)}`;
 
     function saveAll(shouldCalculate = true) {
         if (isLoadingSheet || !activeCharacterId) return;
-        const lvlEl = getPreferredField('in-lvl');
-        if (lvlEl) setFieldValueAll('in-lvl', clampLevel(lvlEl.value));
-        const s = captureSheetState();
-        applySheetDataToFields(s);
+        const s = saveCharacterSnapshotById(activeCharacterId, false);
+        if (!s) return;
         syncSheetSettings();
-        if (writeCharacterSheet(activeCharacterId, s)) {
-            updateActiveCharacterMeta(s);
-            scheduleCloudSave(s);
-        }
         if (shouldCalculate) calculate();
     }
 
@@ -6281,7 +6313,12 @@ ${getCleanFeatType(slot.type)}`;
         safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId, false);
         let sheet = null;
         sheet = readCharacterSheet(activeCharacterId);
-        loadSheetData(sheet || createBlankSheetData());
+        if (!sheet) {
+            sheet = createBlankSheetData();
+            sheet._characterId = String(activeCharacterId);
+            writeCharacterSheet(activeCharacterId, sheet);
+        }
+        loadSheetData(sheet);
         updateActiveCharacterMeta();
         renderCharacterMenu();
         document.body.classList.toggle('main-menu-open', !!showMenuOnReady);

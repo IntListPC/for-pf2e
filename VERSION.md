@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.01h`
+Current version: `1.01i`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 
@@ -13,3 +13,6 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 `1.01f` - Account cloud status moved to the center of the character toolbar to stop nickname jumping; account nickname enlarged; cache-busting updated.
 
 `1.01h` - Cloud toolbar status is now absolutely positioned between the character counter and JSON upload button, so the upload/delete button no longer shifts when messages appear or fade.
+
+
+`1.01i` - Character saving is locked to the exact active character id when switching or returning to the menu; sheet records are stamped with their owner id and account/menu fields are excluded from character snapshots to prevent one character's sheet from being copied onto another card.

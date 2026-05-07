@@ -5297,24 +5297,12 @@ ${getCleanFeatType(slot.type)}`;
             data: snapshot,
             updated_at: new Date().toISOString()
         };
-        const { data: existingRows, error: findError } = await supabaseClient
+        const { error } = await supabaseClient
             .from('account_backups')
-            .select('nickname_key')
-            .eq('nickname_key', nicknameKey)
-            .limit(1);
-        if (findError) {
-            console.warn('Cloud account lookup error', findError);
-            updateCloudAuthUI('Не удалось найти облачную запись для ника');
-            return;
-        }
-        const existingKey = existingRows?.[0]?.nickname_key;
-        const request = existingKey
-            ? supabaseClient.from('account_backups').update(payload).eq('nickname_key', existingKey)
-            : supabaseClient.from('account_backups').insert(payload);
-        const { error } = await request;
+            .upsert(payload, { onConflict: 'nickname_key' });
         if (error) {
             console.warn('Cloud account save error', error);
-            updateCloudAuthUI('Не удалось сохранить в облако');
+            updateCloudAuthUI(`Не удалось сохранить: ${error.message || 'ошибка Supabase'}`);
             return;
         }
         updateCloudAuthUI('Сохранено в облако');
@@ -6032,8 +6020,41 @@ ${getCleanFeatType(slot.type)}`;
     }
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    Object.assign(window, {
+        openAccountProfile,
+        loginNicknameAccount,
+        logoutNicknameAccount,
+        handleProfileAvatar,
+        saveAccountToCloud,
+        requestLoadAccountFromCloud,
+        confirmCloudDownload,
+        openModal,
+        closeModal
+    });
+
+    function bindAccountControls() {
+        const profileButton = document.querySelector('.site-icon-mark');
+        if (profileButton && !profileButton.dataset.accountBound) {
+            profileButton.dataset.accountBound = 'true';
+            profileButton.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                openAccountProfile();
+            });
+        }
+    }
     
+    document.addEventListener('click', event => {
+        const profileButton = event.target.closest?.('.site-icon-mark');
+        if (!profileButton) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openAccountProfile();
+    }, true);
+
     window.addEventListener('DOMContentLoaded', async () => {
+        bindAccountControls();
         init(true);
         if (window.innerWidth >= 1000 && currentPage === 0) {
             switchPage(1);

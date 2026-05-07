@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.01j">
+    <link rel="stylesheet" href="css/styles.css?v=1.01k">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -43,8 +43,11 @@
             </div>
             <h1 class="character-menu-title">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
-                <button type="button" id="cloud-save-btn" class="cloud-action-btn cloud-action-save" onclick="saveAccountToCloud({ buttonId: 'cloud-save-btn' })" title="Сохранить в облако" aria-label="Сохранить в облако"><span class="cloud-icon">☁</span><span class="cloud-arrow">↑</span></button>
-                <button type="button" id="cloud-download-btn" class="cloud-action-btn cloud-action-load" onclick="requestLoadAccountFromCloud({ buttonId: 'cloud-download-btn' })" title="Загрузить из облака" aria-label="Загрузить из облака"><span class="cloud-icon">☁</span><span class="cloud-arrow">↓</span></button>
+                <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
+                <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
+                    <button type="button" onclick="handleCloudMenuSave(event)">В Облако</button>
+                    <button type="button" onclick="handleCloudMenuLoad(event)">Из Облака</button>
+                </div>
             </div>
         </div>
         <div class="character-menu-toolbar">
@@ -55,7 +58,7 @@
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.01j<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01k<br>by RubiDus</div>
     </div>
 </div>
 
@@ -999,7 +1002,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.01j"></script>
+<script src="js/app.js?v=1.01k"></script>
 
 <div class="footer-spacer"></div>
 </body>

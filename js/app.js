@@ -17,6 +17,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let characterPendingDeleteIds = new Set();
     let characterMenuOpenId = null;
     let characterToolbarMenuOpen = false;
+    let cloudActionMenuOpen = false;
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -5421,6 +5422,7 @@ ${getCleanFeatType(slot.type)}`;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         suppressNextClickAfterReorder = false;
@@ -5637,20 +5639,24 @@ ${getCleanFeatType(slot.type)}`;
         };
     }
 
-    function startCloudButtonAnimation(buttonId) {
+    function startCloudButtonAnimation(buttonId, direction = 'up') {
         if (!buttonId) return;
         const btn = document.getElementById(buttonId);
         if (!btn) return;
-        btn.classList.remove('is-animating');
+        const arrow = btn.querySelector?.('.cloud-arrow');
+        btn.classList.remove('is-animating', 'cloud-action-up', 'cloud-action-down');
+        if (arrow) arrow.textContent = direction === 'down' ? '↓' : '↑';
         void btn.offsetWidth;
-        btn.classList.add('is-animating');
+        btn.classList.add('is-animating', direction === 'down' ? 'cloud-action-down' : 'cloud-action-up');
     }
 
     function stopCloudButtonAnimation(buttonId) {
         if (!buttonId) return;
         const btn = document.getElementById(buttonId);
         if (!btn) return;
-        btn.classList.remove('is-animating');
+        btn.classList.remove('is-animating', 'cloud-action-up', 'cloud-action-down');
+        const arrow = btn.querySelector?.('.cloud-arrow');
+        if (arrow) arrow.textContent = '';
     }
 
     function setCloudBusy(active) {
@@ -5660,7 +5666,7 @@ ${getCleanFeatType(slot.type)}`;
     async function saveAccountToCloud(options = {}) {
         if (!requireNicknameAccount()) return false;
         if (cloudLoading) return false;
-        startCloudButtonAnimation(options.buttonId || '');
+        startCloudButtonAnimation(options.buttonId || '', options.direction || 'up');
         cloudLoading = true;
         setCloudBusy(true);
         const snapshot = buildAccountSnapshot();
@@ -5698,7 +5704,7 @@ ${getCleanFeatType(slot.type)}`;
         if (cloudLoading) return;
         cloudLoading = true;
         setCloudBusy(true);
-        startCloudButtonAnimation(options.buttonId || '');
+        startCloudButtonAnimation(options.buttonId || '', options.direction || 'down');
         setCloudSyncStatus('Загрузка из облака');
         try {
             const { data: row, error } = await fetchAccountBackupRow();
@@ -6010,9 +6016,55 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function closeCharacterToolbarMenu() {
-        if (!characterToolbarMenuOpen) return;
+        const hadCharacterMenu = !!characterToolbarMenuOpen;
+        const hadCloudMenu = !!cloudActionMenuOpen;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
+        if (hadCharacterMenu) renderCharacterToolbarMenu();
+        if (hadCloudMenu) renderCloudActionMenu();
+    }
+
+    function renderCloudActionMenu() {
+        const menu = document.getElementById('cloud-action-menu');
+        if (menu) menu.classList.toggle('active', !!cloudActionMenuOpen);
+    }
+
+    function closeCloudActionMenu() {
+        if (!cloudActionMenuOpen) return;
+        cloudActionMenuOpen = false;
+        renderCloudActionMenu();
+    }
+
+    function toggleCloudActionMenu(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!requireNicknameAccount()) return;
+        if (cloudLoading) return;
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = !cloudActionMenuOpen;
         renderCharacterToolbarMenu();
+        renderCloudActionMenu();
+    }
+
+    function handleCloudMenuSave(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        closeCloudActionMenu();
+        return saveAccountToCloud({ buttonId: 'cloud-menu-btn', direction: 'up' });
+    }
+
+    function handleCloudMenuLoad(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        closeCloudActionMenu();
+        return requestLoadAccountFromCloud({ buttonId: 'cloud-menu-btn', direction: 'down' });
     }
 
     function toggleCharacterToolbarMenu(event = null) {
@@ -6026,6 +6078,8 @@ ${getCleanFeatType(slot.type)}`;
         }
         characterMenuOpenId = null;
         characterToolbarMenuOpen = !characterToolbarMenuOpen;
+        cloudActionMenuOpen = false;
+        renderCloudActionMenu();
         renderCharacterMenu();
     }
 
@@ -6036,6 +6090,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         if (characterPendingDeleteIds.size || mobileReorderMode === 'characters') return;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         characterMenuOpenId = String(characterMenuOpenId) === String(id) ? null : String(id);
         renderCharacterMenu();
     }
@@ -6047,6 +6102,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         characterPendingDeleteIds.add(String(id));
         characterDeleteSelectMode = true;
         mobileReorderMode = null;
@@ -6080,6 +6136,7 @@ ${getCleanFeatType(slot.type)}`;
         characterDeleteSelectMode = false;
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         writeCharacters();
@@ -6400,6 +6457,7 @@ ${getCleanFeatType(slot.type)}`;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         renderCharacterMenu();
@@ -6520,6 +6578,7 @@ ${getCleanFeatType(slot.type)}`;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         document.body.classList.add('main-menu-open');
@@ -6626,6 +6685,9 @@ ${getCleanFeatType(slot.type)}`;
         handleProfileAvatar,
         saveAccountToCloud,
         requestLoadAccountFromCloud,
+        toggleCloudActionMenu,
+        handleCloudMenuSave,
+        handleCloudMenuLoad,
         exportAllCharactersJSON,
         startImportCharacterAsNew,
         confirmCloudDownload,
@@ -6655,10 +6717,11 @@ ${getCleanFeatType(slot.type)}`;
 
 
     document.addEventListener('click', event => {
-        if (event.target.closest?.('.character-card-actions, .character-toolbar-actions')) return;
+        if (event.target.closest?.('.character-card-actions, .character-toolbar-actions, .cloud-action-buttons')) return;
         let changed = false;
         if (characterMenuOpenId) { characterMenuOpenId = null; changed = true; }
         if (characterToolbarMenuOpen) { characterToolbarMenuOpen = false; changed = true; }
+        if (cloudActionMenuOpen) { cloudActionMenuOpen = false; renderCloudActionMenu(); }
         if (changed && document.body.classList.contains('main-menu-open')) renderCharacterMenu();
     });
 

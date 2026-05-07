@@ -1223,3 +1223,87 @@ body.cloud-busy::after {
     cursor: wait;
     background: rgba(0, 0, 0, 0.015);
 }
+
+
+/* 1.01k: single stable cloud button with dropdown menu */
+.cloud-action-buttons {
+    position: relative !important;
+    overflow: visible !important;
+}
+.cloud-action-buttons.active {
+    display: flex !important;
+}
+.cloud-action-btn.cloud-menu-btn {
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    border-radius: 15px !important;
+    gap: 0 !important;
+    letter-spacing: 0 !important;
+    overflow: hidden !important;
+}
+.cloud-action-btn .cloud-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 23px !important;
+    line-height: 1 !important;
+    transform: translateY(1px);
+}
+.cloud-action-btn .cloud-arrow {
+    position: absolute;
+    right: 4px;
+    top: 3px;
+    width: 16px;
+    height: 16px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px !important;
+    font-weight: 1000;
+    line-height: 1 !important;
+    opacity: 0;
+    color: #ffffff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.45);
+    pointer-events: none;
+}
+.cloud-action-btn.is-animating .cloud-arrow {
+    opacity: 1;
+}
+.cloud-action-btn.is-animating.cloud-action-up .cloud-arrow {
+    animation: cloud-arrow-up 0.82s ease-in-out infinite !important;
+}
+.cloud-action-btn.is-animating.cloud-action-down .cloud-arrow {
+    animation: cloud-arrow-down 0.82s ease-in-out infinite !important;
+}
+.cloud-action-btn:not(.is-animating) .cloud-arrow {
+    opacity: 0 !important;
+    animation: none !important;
+}
+.cloud-action-menu {
+    display: none !important;
+    right: 0 !important;
+    top: calc(100% + 8px) !important;
+    z-index: 80 !important;
+}
+.cloud-action-menu.active {
+    display: flex !important;
+}
+@media (max-width: 480px) {
+    .cloud-action-btn.cloud-menu-btn {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        border-radius: 14px !important;
+    }
+    .cloud-action-btn .cloud-icon {
+        font-size: 21px !important;
+    }
+    .cloud-action-btn .cloud-arrow {
+        right: 3px;
+        top: 2px;
+        font-size: 14px !important;
+    }
+}

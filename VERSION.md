@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.01j`
+Current version: `1.01k`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 
@@ -18,3 +18,5 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 `1.01i` - Character saving is locked to the exact active character id when switching or returning to the menu; sheet records are stamped with their owner id and account/menu fields are excluded from character snapshots to prevent one character's sheet from being copied onto another card.
 
 `1.01j` - Clone and new character names no longer get extra copy/number labels; switching characters resets HP max tracking so HP is not changed by opening another card; JSON toolbar now opens a menu with load/save-all, bundle import can add multiple characters up to the limit, and cloud save/load blocks page clicks while active.
+
+`1.01k` - Cloud save/load controls were combined into one stable cloud button with a dropdown menu; arrows animate only for the selected cloud direction and disappear afterward.

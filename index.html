@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.01i">
+    <link rel="stylesheet" href="css/styles.css?v=1.01j">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -51,11 +51,11 @@
             <div id="character-count" class="character-count">0/10</div>
             <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
             <div class="character-toolbar-actions">
-                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick()" title="Загрузить персонажа" aria-label="Загрузить персонажа"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button>
+                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.01i<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01j<br>by RubiDus</div>
     </div>
 </div>
 
@@ -823,7 +823,7 @@
     <div class="menu-item" onclick="closeModal('avatarMenuModal'); openModal('sheetSettingsModal')" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer;">⚙️ Настройки</div>
     <input type="file" id="fileInput" style="display:none" onchange="handleImg(this)" accept="image/*">
     <input type="file" id="jsonInput" style="display:none" onchange="importJSON(this)" accept=".json">
-    <input type="file" id="jsonNewInput" style="display:none" onchange="importJSON(this, true)" accept=".json">
+    <input type="file" id="jsonNewInput" style="display:none" onchange="importJSON(this, true)" accept=".json" multiple>
     <button onclick="closeModal('avatarMenuModal')" class="btn-sec">ОТМЕНА</button>
 </div></div>
 
@@ -999,7 +999,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.01i"></script>
+<script src="js/app.js?v=1.01j"></script>
 
 <div class="footer-spacer"></div>
 </body>

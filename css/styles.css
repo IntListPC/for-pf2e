@@ -1197,3 +1197,29 @@
         max-width: none !important;
     }
 }
+
+/* 1.01j: JSON toolbar menu and cloud blocking overlay */
+.character-menu-toolbar {
+    overflow: visible !important;
+}
+.character-toolbar-actions {
+    position: relative !important;
+}
+.character-toolbar-menu {
+    display: none !important;
+    right: 0 !important;
+    top: calc(100% + 8px) !important;
+    z-index: 60 !important;
+}
+.character-toolbar-menu.active {
+    display: flex !important;
+}
+body.cloud-busy::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    pointer-events: auto;
+    cursor: wait;
+    background: rgba(0, 0, 0, 0.015);
+}

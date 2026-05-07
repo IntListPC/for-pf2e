@@ -16,6 +16,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let characterDeleteSelectMode = false;
     let characterPendingDeleteIds = new Set();
     let characterMenuOpenId = null;
+    let characterToolbarMenuOpen = false;
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -5419,6 +5420,7 @@ ${getCleanFeatType(slot.type)}`;
         characterDeleteSelectMode = false;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         suppressNextClickAfterReorder = false;
@@ -5651,11 +5653,16 @@ ${getCleanFeatType(slot.type)}`;
         btn.classList.remove('is-animating');
     }
 
+    function setCloudBusy(active) {
+        document.body.classList.toggle('cloud-busy', !!active);
+    }
+
     async function saveAccountToCloud(options = {}) {
         if (!requireNicknameAccount()) return false;
         if (cloudLoading) return false;
         startCloudButtonAnimation(options.buttonId || '');
         cloudLoading = true;
+        setCloudBusy(true);
         const snapshot = buildAccountSnapshot();
         setCloudSyncStatus(options.logout ? 'Сохранение в облако' : (options.auto ? 'Сохранение в облако' : 'Сохранение в облако'));
         const nicknameKey = accountStorageKey(cloudUser.nickname);
@@ -5681,31 +5688,40 @@ ${getCleanFeatType(slot.type)}`;
             return true;
         } finally {
             cloudLoading = false;
+            setCloudBusy(false);
             stopCloudButtonAnimation(options.buttonId || '');
         }
     }
 
     async function requestLoadAccountFromCloud(options = {}) {
         if (!requireNicknameAccount()) return;
+        if (cloudLoading) return;
+        cloudLoading = true;
+        setCloudBusy(true);
         startCloudButtonAnimation(options.buttonId || '');
         setCloudSyncStatus('Загрузка из облака');
-        const { data: row, error } = await fetchAccountBackupRow();
-        stopCloudButtonAnimation(options.buttonId || '');
-        if (error) {
-            console.warn('Cloud account load error', error);
-            updateCloudAuthUI(`Не удалось загрузить данные облака: ${formatCloudError(error)}`);
-            return;
+        try {
+            const { data: row, error } = await fetchAccountBackupRow();
+            if (error) {
+                console.warn('Cloud account load error', error);
+                updateCloudAuthUI(`Не удалось загрузить данные облака: ${formatCloudError(error)}`);
+                return;
+            }
+            updateCloudAuthUI('Загрузка из облака');
+            const snapshot = row?.data || null;
+            if (!snapshot || !Array.isArray(snapshot.characters)) {
+                updateCloudAuthUI('В облаке нет данных для этого аккаунта');
+                return;
+            }
+            pendingCloudDownloadSnapshot = snapshot;
+            const hasLocalCharacters = readCharacters().length > 0;
+            if (hasLocalCharacters) openModal('cloudConfirmModal');
+            else confirmCloudDownload(true);
+        } finally {
+            cloudLoading = false;
+            setCloudBusy(false);
+            stopCloudButtonAnimation(options.buttonId || '');
         }
-        updateCloudAuthUI('Загрузка из облака');
-        const snapshot = row?.data || null;
-        if (!snapshot || !Array.isArray(snapshot.characters)) {
-            updateCloudAuthUI('В облаке нет данных для этого аккаунта');
-            return;
-        }
-        pendingCloudDownloadSnapshot = snapshot;
-        const hasLocalCharacters = readCharacters().length > 0;
-        if (hasLocalCharacters) openModal('cloudConfirmModal');
-        else confirmCloudDownload(true);
     }
 
     function confirmCloudDownload(shouldApply) {
@@ -5820,6 +5836,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function resetSheetRuntimeState() {
         skillProf = {}; saveProf = { fort: 0, ref: 0, will: 0, perc: 0 };
+        lastMaxHP = 0;
         heroPoints = 0; itemBonuses = {}; lores = { 1: '', 2: '', 3: '' };
         abilities = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
         partialBoosts = { str: false, dex: false, con: false, int: false, wis: false, cha: false };
@@ -5977,17 +5994,38 @@ ${getCleanFeatType(slot.type)}`;
         return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg>';
     }
 
-    function handleCharacterToolbarUploadClick() {
-        if (characterPendingDeleteIds && characterPendingDeleteIds.size) {
-            confirmPendingCharacterDeletes();
-            return;
-        }
-        startImportCharacterAsNew();
+    function handleCharacterToolbarUploadClick(event = null) {
+        toggleCharacterToolbarMenu(event);
     }
 
     function closeCharacterContextMenu() {
         if (!characterMenuOpenId) return;
         characterMenuOpenId = null;
+        renderCharacterMenu();
+    }
+
+    function renderCharacterToolbarMenu() {
+        const menu = document.getElementById('character-toolbar-menu');
+        if (menu) menu.classList.toggle('active', !!characterToolbarMenuOpen);
+    }
+
+    function closeCharacterToolbarMenu() {
+        if (!characterToolbarMenuOpen) return;
+        characterToolbarMenuOpen = false;
+        renderCharacterToolbarMenu();
+    }
+
+    function toggleCharacterToolbarMenu(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (characterPendingDeleteIds && characterPendingDeleteIds.size) {
+            confirmPendingCharacterDeletes();
+            return;
+        }
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = !characterToolbarMenuOpen;
         renderCharacterMenu();
     }
 
@@ -5997,6 +6035,7 @@ ${getCleanFeatType(slot.type)}`;
             event.stopPropagation();
         }
         if (characterPendingDeleteIds.size || mobileReorderMode === 'characters') return;
+        characterToolbarMenuOpen = false;
         characterMenuOpenId = String(characterMenuOpenId) === String(id) ? null : String(id);
         renderCharacterMenu();
     }
@@ -6007,6 +6046,7 @@ ${getCleanFeatType(slot.type)}`;
             event.stopPropagation();
         }
         characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
         characterPendingDeleteIds.add(String(id));
         characterDeleteSelectMode = true;
         mobileReorderMode = null;
@@ -6039,6 +6079,7 @@ ${getCleanFeatType(slot.type)}`;
         characterPendingDeleteIds.clear();
         characterDeleteSelectMode = false;
         characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         writeCharacters();
@@ -6052,6 +6093,7 @@ ${getCleanFeatType(slot.type)}`;
         const uploadBtn = document.getElementById('character-upload-btn');
         const countEl = document.getElementById('character-count');
         if (!list) return;
+        renderCharacterToolbarMenu();
         characterPendingDeleteIds = characterPendingDeleteIds instanceof Set ? characterPendingDeleteIds : new Set();
         const existingIds = new Set(characters.map(ch => String(ch.id)));
         characterPendingDeleteIds.forEach(id => { if (!existingIds.has(String(id))) characterPendingDeleteIds.delete(id); });
@@ -6068,11 +6110,13 @@ ${getCleanFeatType(slot.type)}`;
         if (uploadBtn) {
             const pendingDelete = characterPendingDeleteIds.size > 0;
             const canAdd = characters.length < MAX_CHARACTERS;
-            uploadBtn.disabled = pendingDelete ? false : !canAdd;
+            uploadBtn.disabled = false;
             uploadBtn.classList.toggle('delete-confirm', pendingDelete);
-            uploadBtn.title = pendingDelete ? 'Удалить выбранных' : (canAdd ? 'Загрузить JSON' : 'Достигнут лимит персонажей');
+            uploadBtn.title = pendingDelete ? 'Удалить выбранных' : 'Меню JSON';
             uploadBtn.setAttribute('aria-label', uploadBtn.title);
             uploadBtn.innerHTML = pendingDelete ? '✕' : getCharacterUploadIconHtml();
+            if (pendingDelete) characterToolbarMenuOpen = false;
+            renderCharacterToolbarMenu();
         }
         const reorderActive = mobileReorderMode === 'characters';
         const addCardHtml = (!characterDeleteSelectMode && !reorderActive && characters.length < MAX_CHARACTERS)
@@ -6176,7 +6220,7 @@ ${getCleanFeatType(slot.type)}`;
         characterDeleteSelectMode = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
-        const sheet = createBlankSheetData(`Персонаж ${characters.length + 1}`);
+        const sheet = createBlankSheetData('Новый герой');
         const row = cloudUser ? await createCloudCharacter(sheet) : null;
         const id = row?.id || makeCharacterId();
         writeCharacterSheet(id, sheet);
@@ -6199,7 +6243,7 @@ ${getCleanFeatType(slot.type)}`;
         const sourceSheet = normalizeLoadedSheet(readCharacterSheet(id) || createBlankSheetData(source?.name || 'Герой'));
         const sheet = JSON.parse(JSON.stringify(sourceSheet));
         const baseName = String(sheet['in-name'] || source?.name || 'Герой').trim() || 'Герой';
-        sheet['in-name'] = `${baseName} копия`;
+        sheet['in-name'] = baseName;
         const avatar = localStorage.getItem(characterAvatarKey(id)) || source?.avatar || '';
         const row = cloudUser ? await createCloudCharacter(sheet, avatar) : null;
         const newId = row?.id || makeCharacterId();
@@ -6355,6 +6399,7 @@ ${getCleanFeatType(slot.type)}`;
         characterDeleteSelectMode = false;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         renderCharacterMenu();
@@ -6367,88 +6412,177 @@ ${getCleanFeatType(slot.type)}`;
         exportJSON(id);
     }
 
-    function exportJSON(id = activeCharacterId) {
-        if (!id) return;
-        if (String(id) === String(activeCharacterId)) saveAll(false);
-        let sheet = null;
-        sheet = readCharacterSheet(id);
+    function buildCharacterExportItem(id, index = 0) {
+        const sheet = normalizeLoadedSheet(readCharacterSheet(id) || createBlankSheetData(`Персонаж ${index + 1}`));
         const avatar = localStorage.getItem(characterAvatarKey(id)) || '';
-        const ch = characters.find(x => String(x.id) === String(id)) || { id, ...getCharacterMetaFromSheet(sheet, avatar) };
-        const fullData = JSON.stringify({
-            version: 2,
-            character: { ...ch, sheet, avatar },
+        const ch = characters.find(x => String(x.id) === String(id)) || { id, ...getCharacterMetaFromSheet(sheet) };
+        return {
+            id: String(id || makeCharacterId()),
+            name: ch.name || sheet?.['in-name'] || 'Герой',
+            meta: ch.meta || getCharacterMetaFromSheet(sheet).meta,
             sheet,
             avatar
-        });
-        const safeName = String(ch.name || sheet?.['in-name'] || 'Hero').replace(/[\\/:*?"<>|]+/g, '_');
-        const filename = `PF2e_${safeName}.json`;
-        const blob = new Blob([fullData], {type: "application/json"});
+        };
+    }
+
+    function downloadJSONFile(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click();
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
         setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
     }
 
-    function importJSON(input, forceNew = false) {
-        const shouldCreateNewCharacter = !!forceNew;
-        if (input.files && input.files[0]) {
+    function exportJSON(id = activeCharacterId) {
+        if (!id) return;
+        if (String(id) === String(activeCharacterId)) saveAll(false);
+        const item = buildCharacterExportItem(id);
+        const safeName = String(item.name || 'Hero').replace(/[\/:*?"<>|]+/g, '_');
+        downloadJSONFile({
+            version: 2,
+            character: item,
+            sheet: item.sheet,
+            avatar: item.avatar
+        }, `PF2e_${safeName}.json`);
+    }
+
+    function exportAllCharactersJSON(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        closeCharacterToolbarMenu();
+        if (activeCharacterId) saveAll(false);
+        const list = readCharacters();
+        if (!list.length) {
+            alert('Нет персонажей для сохранения.');
+            return;
+        }
+        const bundle = {
+            version: 3,
+            type: 'intlistpc_characters_bundle',
+            exportedAt: new Date().toISOString(),
+            characters: list.map((ch, index) => buildCharacterExportItem(ch.id, index))
+        };
+        downloadJSONFile(bundle, 'IntListPC_all_characters.json');
+    }
+
+    function readFileAsText(file) {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = async e => {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    const imported = data.character || {};
-                    const sheet = normalizeLoadedSheet(imported.sheet || data.sheet || data);
-                    const avatar = imported.avatar || data.avatar || '';
-                    let id = shouldCreateNewCharacter ? null : activeCharacterId;
-                    let createdAsNew = false;
-                    if (!id) {
-                        if (characters.length >= MAX_CHARACTERS) {
-                            alert('Пока можно создать не больше 10 персонажей.');
-                            return;
-                        }
-                        const row = cloudUser ? await createCloudCharacter(sheet, avatar) : null;
-                        id = row?.id || makeCharacterId();
-                        characters.push(row ? cloudRowToCharacter(row) : { id, ...getCharacterMetaFromSheet(sheet) });
-                        createdAsNew = true;
-                    }
-                    if (!shouldCreateNewCharacter) {
-                        activeCharacterId = id;
-                        safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
-                    }
-                    writeCharacterSheet(id, sheet);
-                    if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
-                    else safeStorageRemove(characterAvatarKey(id));
-                    const idx = characters.findIndex(ch => String(ch.id) === String(id));
-                    if (idx >= 0) {
-                        const { avatar: oldAvatar, ...rest } = characters[idx];
-                        characters[idx] = { ...rest, ...getCharacterMetaFromSheet(sheet), ...(cloudUser && isUuid(id) ? { cloud: true } : {}) };
-                    }
-                    writeCharacters();
-                    closeModal('avatarMenuModal');
-                    if (shouldCreateNewCharacter) {
-                        characterDeleteSelectMode = false;
-                        mobileReorderMode = null;
-                        selectedMobileReorder = null;
-                        document.body.classList.add('main-menu-open');
-                        setRoute('menu', null, true);
-                        renderCharacterMenu();
-                    } else {
-                        document.body.classList.remove('main-menu-open');
-                        loadAll(false);
-                        setRoute('character', id, true);
-                        if (cloudUser && !createdAsNew) await saveCharacterToCloud(id, sheet);
-                    }
-                } catch (err) {
-                    alert('Не удалось загрузить JSON.');
-                } finally {
-                    input.value = '';
+            reader.onload = e => resolve(String(e.target?.result || ''));
+            reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+            reader.readAsText(file);
+        });
+    }
+
+    function extractImportedCharacterItems(data) {
+        const sourceCharacters = Array.isArray(data?.characters)
+            ? data.characters
+            : (Array.isArray(data?.data?.characters) ? data.data.characters : null);
+        if (sourceCharacters) {
+            return sourceCharacters.map((item, index) => {
+                const imported = item?.character || item || {};
+                const sheet = normalizeLoadedSheet(imported.sheet || item.sheet || createBlankSheetData(`Персонаж ${index + 1}`));
+                const avatar = imported.avatar || item.avatar || '';
+                return { sheet, avatar };
+            });
+        }
+        const imported = data?.character || data || {};
+        const sheet = normalizeLoadedSheet(imported.sheet || data.sheet || data);
+        const avatar = imported.avatar || data.avatar || '';
+        return [{ sheet, avatar }];
+    }
+
+    function importCharacterItemsAsNew(items) {
+        const cleanItems = (items || []).filter(item => item && item.sheet);
+        if (!cleanItems.length) throw new Error('empty import');
+        if (characters.length + cleanItems.length > MAX_CHARACTERS) {
+            throw new Error(`Ошибка загрузки: после импорта будет больше ${MAX_CHARACTERS} персонажей.`);
+        }
+        if (activeCharacterId) saveAll(false);
+        const added = [];
+        cleanItems.forEach((item, index) => {
+            const id = makeCharacterId();
+            const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData('Новый герой'));
+            const avatar = item.avatar || '';
+            writeCharacterSheet(id, sheet);
+            if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
+            else safeStorageRemove(characterAvatarKey(id));
+            added.push({ id, ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() });
+        });
+        characters = characters.concat(added);
+        writeCharacters();
+        characterDeleteSelectMode = false;
+        characterPendingDeleteIds.clear();
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        mobileReorderMode = null;
+        selectedMobileReorder = null;
+        document.body.classList.add('main-menu-open');
+        setRoute('menu', null, true);
+        renderCharacterMenu();
+    }
+
+    async function importJSON(input, forceNew = false) {
+        const shouldCreateNewCharacter = !!forceNew;
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        try {
+            const parsedFiles = [];
+            for (const file of files) {
+                parsedFiles.push(JSON.parse(await readFileAsText(file)));
+            }
+
+            if (shouldCreateNewCharacter) {
+                const items = parsedFiles.flatMap(extractImportedCharacterItems);
+                importCharacterItemsAsNew(items);
+                closeModal('avatarMenuModal');
+                return;
+            }
+
+            const firstItems = extractImportedCharacterItems(parsedFiles[0]);
+            const first = firstItems[0];
+            if (!first) throw new Error('empty import');
+            const sheet = normalizeLoadedSheet(first.sheet);
+            const avatar = first.avatar || '';
+            let id = activeCharacterId;
+            let createdAsNew = false;
+            if (!id) {
+                if (characters.length >= MAX_CHARACTERS) {
+                    alert('Пока можно создать не больше 10 персонажей.');
+                    return;
                 }
-            };
-            reader.readAsText(input.files[0]);
+                id = makeCharacterId();
+                characters.push({ id, ...getCharacterMetaFromSheet(sheet) });
+                createdAsNew = true;
+            }
+            activeCharacterId = id;
+            safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
+            writeCharacterSheet(id, sheet);
+            if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
+            else safeStorageRemove(characterAvatarKey(id));
+            const idx = characters.findIndex(ch => String(ch.id) === String(id));
+            if (idx >= 0) {
+                const { avatar: oldAvatar, ...rest } = characters[idx];
+                characters[idx] = { ...rest, ...getCharacterMetaFromSheet(sheet), ...(cloudUser && isUuid(id) ? { cloud: true } : {}) };
+            }
+            writeCharacters();
+            closeModal('avatarMenuModal');
+            document.body.classList.remove('main-menu-open');
+            loadAll(false);
+            setRoute('character', id, true);
+            if (cloudUser && !createdAsNew) await saveCharacterToCloud(id, sheet);
+        } catch (err) {
+            alert(err?.message && /^Ошибка загрузки/.test(err.message) ? err.message : 'Не удалось загрузить JSON.');
+        } finally {
+            input.value = '';
         }
     }
-    
+
     function showAv(s) {
         const img = document.getElementById('avatar-img');
         const plus = document.getElementById('avatar-plus');
@@ -6492,6 +6626,8 @@ ${getCleanFeatType(slot.type)}`;
         handleProfileAvatar,
         saveAccountToCloud,
         requestLoadAccountFromCloud,
+        exportAllCharactersJSON,
+        startImportCharacterAsNew,
         confirmCloudDownload,
         openModal,
         closeModal
@@ -6516,6 +6652,15 @@ ${getCleanFeatType(slot.type)}`;
         event.stopPropagation();
         openAccountProfile();
     }, true);
+
+
+    document.addEventListener('click', event => {
+        if (event.target.closest?.('.character-card-actions, .character-toolbar-actions')) return;
+        let changed = false;
+        if (characterMenuOpenId) { characterMenuOpenId = null; changed = true; }
+        if (characterToolbarMenuOpen) { characterToolbarMenuOpen = false; changed = true; }
+        if (changed && document.body.classList.contains('main-menu-open')) renderCharacterMenu();
+    });
 
     window.addEventListener('DOMContentLoaded', async () => {
         bindAccountControls();

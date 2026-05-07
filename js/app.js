@@ -5217,15 +5217,15 @@ ${getCleanFeatType(slot.type)}`;
             fading: false
         };
         renderAccountStatus();
-        if (clean && !options.error && options.autoHide !== false) {
+        if (clean && !options.loading && !options.error && options.autoHide !== false) {
             accountStatusFadeTimer = setTimeout(() => {
                 accountStatusState.fading = true;
                 renderAccountStatus();
-            }, options.fadeAfter || 4300);
+            }, options.fadeAfter || 5000);
             accountStatusClearTimer = setTimeout(() => {
                 accountStatusState = { message: '', loading: false, error: false, fading: false };
                 renderAccountStatus();
-            }, options.clearAfter || 5000);
+            }, options.clearAfter || 5800);
         }
     }
 
@@ -5243,7 +5243,7 @@ ${getCleanFeatType(slot.type)}`;
             setOptionalAccountText(modalInfo, errorText);
         } else {
             if (cleanMessage) {
-                setAccountHeaderStatus(normalizeAccountActivityMessage(cleanMessage), { loading: true, autoHide: true });
+                setAccountHeaderStatus(normalizeAccountActivityMessage(cleanMessage), { loading: false, autoHide: true });
             } else {
                 renderAccountStatus();
             }
@@ -5483,10 +5483,11 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function setCloudSyncStatus(message) {
-        updateAccountSummary(message || '');
+        const text = normalizeAccountActivityMessage(message || '');
+        setAccountHeaderStatus(text, { loading: !!text, autoHide: false });
         const syncStatus = document.getElementById('cloud-sync-status');
         const bar = document.getElementById('cloud-auth-bar');
-        if (syncStatus) syncStatus.innerText = message || '';
+        if (syncStatus) syncStatus.innerText = '';
         if (bar) bar.classList.toggle('open', false);
     }
 
@@ -5580,7 +5581,7 @@ ${getCleanFeatType(slot.type)}`;
         if (avatar) {
             cloudUser.avatar = avatar;
             writeAccountProfile(cloudUser);
-            updateAccountUI(showMessage ? 'Профиль загружен из облака' : '');
+            updateAccountUI(showMessage ? 'Загрузка из облака' : '');
         } else if (showMessage) {
             updateAccountUI();
         } else {
@@ -5614,12 +5615,29 @@ ${getCleanFeatType(slot.type)}`;
         };
     }
 
+    function startCloudButtonAnimation(buttonId) {
+        if (!buttonId) return;
+        const btn = document.getElementById(buttonId);
+        if (!btn) return;
+        btn.classList.remove('is-animating');
+        void btn.offsetWidth;
+        btn.classList.add('is-animating');
+    }
+
+    function stopCloudButtonAnimation(buttonId) {
+        if (!buttonId) return;
+        const btn = document.getElementById(buttonId);
+        if (!btn) return;
+        btn.classList.remove('is-animating');
+    }
+
     async function saveAccountToCloud(options = {}) {
         if (!requireNicknameAccount()) return false;
         if (cloudLoading) return false;
+        startCloudButtonAnimation(options.buttonId || '');
         cloudLoading = true;
         const snapshot = buildAccountSnapshot();
-        setCloudSyncStatus(options.logout ? 'Сохраняю перед выходом...' : (options.auto ? 'Автосохранение в облако...' : 'Сохраняю всё в облако...'));
+        setCloudSyncStatus(options.logout ? 'Сохранение в облако' : (options.auto ? 'Сохранение в облако' : 'Сохранение в облако'));
         const nicknameKey = accountStorageKey(cloudUser.nickname);
         const payload = {
             nickname_key: nicknameKey,
@@ -5639,22 +5657,26 @@ ${getCleanFeatType(slot.type)}`;
                 updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
                 return false;
             }
-            updateCloudAuthUI();
+            updateCloudAuthUI('Сохранение в облако');
             return true;
         } finally {
             cloudLoading = false;
+            stopCloudButtonAnimation(options.buttonId || '');
         }
     }
 
-    async function requestLoadAccountFromCloud() {
+    async function requestLoadAccountFromCloud(options = {}) {
         if (!requireNicknameAccount()) return;
-        setCloudSyncStatus('Ищу данные в облаке...');
+        startCloudButtonAnimation(options.buttonId || '');
+        setCloudSyncStatus('Загрузка из облака');
         const { data: row, error } = await fetchAccountBackupRow();
+        stopCloudButtonAnimation(options.buttonId || '');
         if (error) {
             console.warn('Cloud account load error', error);
             updateCloudAuthUI(`Не удалось загрузить данные облака: ${formatCloudError(error)}`);
             return;
         }
+        updateCloudAuthUI('Загрузка из облака');
         const snapshot = row?.data || null;
         if (!snapshot || !Array.isArray(snapshot.characters)) {
             updateCloudAuthUI('В облаке нет данных для этого аккаунта');

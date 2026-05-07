@@ -41,8 +41,8 @@
             </div>
             <h1 class="character-menu-title">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
-                <button type="button" id="cloud-save-btn" class="cloud-action-btn cloud-action-save" onclick="saveAccountToCloud()" title="Сохранить в облако" aria-label="Сохранить в облако"><span class="cloud-icon">☁</span><span class="cloud-arrow">↑</span></button>
-                <button type="button" id="cloud-download-btn" class="cloud-action-btn cloud-action-load" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака" aria-label="Загрузить из облака"><span class="cloud-icon">☁</span><span class="cloud-arrow">↓</span></button>
+                <button type="button" id="cloud-save-btn" class="cloud-action-btn cloud-action-save" onclick="saveAccountToCloud({ buttonId: 'cloud-save-btn' })" title="Сохранить в облако" aria-label="Сохранить в облако"><span class="cloud-icon">☁</span><span class="cloud-arrow">↑</span></button>
+                <button type="button" id="cloud-download-btn" class="cloud-action-btn cloud-action-load" onclick="requestLoadAccountFromCloud({ buttonId: 'cloud-download-btn' })" title="Загрузить из облака" aria-label="Загрузить из облака"><span class="cloud-icon">☁</span><span class="cloud-arrow">↓</span></button>
             </div>
         </div>
         <div class="character-menu-toolbar">
@@ -52,7 +52,7 @@
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.01b<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01c<br>by RubiDus</div>
     </div>
 </div>
 
@@ -996,7 +996,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.01b"></script>
+<script src="js/app.js?v=1.01c"></script>
 
 <div class="footer-spacer"></div>
 </body>

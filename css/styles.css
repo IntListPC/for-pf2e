@@ -983,17 +983,18 @@
         #atk-type option { color: white; background: var(--input-bg); }
 
         /* 1.01b: account status, cloud arrows, character card menu */
-        .account-header-meta { min-height: 12px; opacity: 1; transition: opacity 0.7s ease, color 0.2s ease; }
+        .account-header-meta { min-height: 12px; opacity: 1; transition: opacity 0.75s ease, color 0.2s ease; }
         .account-header-meta.loading { display: inline-flex !important; align-items: center; gap: 6px; color: #dbeafe; }
-        .account-header-meta.loading::before { content: ''; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; border: 2px solid rgba(219, 234, 254, 0.30); border-top-color: #dbeafe; animation: account-spin 0.8s linear infinite; }
+        .account-header-meta.loading::after { content: ''; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; border: 2px solid rgba(219, 234, 254, 0.30); border-top-color: #dbeafe; animation: account-spin 0.8s linear infinite; }
         .account-header-meta.error { display: block !important; color: #fecaca; }
         .account-header-meta.fading { opacity: 0; }
         @keyframes account-spin { to { transform: rotate(360deg); } }
 
         .cloud-action-btn { gap: 1px; overflow: hidden; position: relative; }
         .cloud-action-btn .cloud-icon { font-size: 17px; line-height: 1; }
-        .cloud-action-btn .cloud-arrow { display: inline-block; font-size: 17px; line-height: 1; animation: cloud-arrow-up 1.05s ease-in-out infinite; }
-        .cloud-action-load .cloud-arrow { animation-name: cloud-arrow-down; }
+        .cloud-action-btn .cloud-arrow { display: inline-block; font-size: 17px; line-height: 1; transform: translateY(0); opacity: 0.9; }
+        .cloud-action-btn.is-animating .cloud-arrow { animation: cloud-arrow-up 0.82s ease-in-out infinite; }
+        .cloud-action-load.is-animating .cloud-arrow { animation-name: cloud-arrow-down; }
         @keyframes cloud-arrow-up { 0%, 100% { transform: translateY(3px); opacity: 0.62; } 45% { transform: translateY(-4px); opacity: 1; } }
         @keyframes cloud-arrow-down { 0%, 100% { transform: translateY(-3px); opacity: 0.62; } 45% { transform: translateY(4px); opacity: 1; } }
 

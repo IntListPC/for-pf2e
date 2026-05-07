@@ -4,7 +4,7 @@
             --text: #ffffff; --text-dim: #94a3b8; --border: #334155; 
             --input-bg: #0f172a; --hp-green: #10b981; --hp-gold: #fbbf24; --hp-red: #ef4444;
             --shield-blue: #3b82f6;
-            --font-main: 'Inter', sans-serif;
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             --header-height: auto;
             --max-width: 1200px;
         }
@@ -850,13 +850,13 @@
         .character-menu-header { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: 64px auto; align-items: center; min-height: 118px; margin: 0 0 18px; }
         .character-menu-header::before { content: ''; position: absolute; z-index: 0; top: 0; left: 50%; width: 100vw; height: 64px; transform: translateX(-50%); background: #2a3554; border-bottom: 1px solid rgba(0, 0, 0, 0.45); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16); }
         .character-menu-title { display: block; grid-column: 1 / -1; grid-row: 2; margin: 18px 0 0; padding: 0 58px; font-size: 28px; font-weight: 900; text-align: center; line-height: 1.12; }
-        .site-icon-mark { grid-column: 1; grid-row: 1; z-index: 1; width: 56px; height: 56px; min-width: 56px; display: inline-flex; align-items: center; justify-content: center; padding: 0; overflow: visible; }
+        .site-icon-mark { grid-column: 1; grid-row: 1; z-index: 1; width: 56px; height: 56px; min-width: 56px; border: 0; background: transparent; display: inline-flex; align-items: center; justify-content: center; padding: 0; overflow: visible; cursor: pointer; box-shadow: none; }
         .site-icon-mark img { width: 54px; height: 54px; display: block; object-fit: contain; border-radius: 12px; }
         .app-version-mark { position: fixed; right: 34px; bottom: 14px; z-index: 1; color: rgba(226, 232, 240, 0.62); font-size: 11px; line-height: 1.25; font-weight: 800; text-align: center; letter-spacing: 0.02em; pointer-events: none; }
-        .cloud-panel-toggle { grid-column: 3; grid-row: 1; z-index: 1; width: 46px; height: 46px; min-width: 46px; border-radius: 15px; border: 1px solid rgba(148, 163, 184, 0.34); background: rgba(148, 163, 184, 0.10); color: #e2e8f0; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 20px; font-weight: 950; line-height: 1; box-shadow: none; transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
-        .cloud-panel-toggle:hover { transform: none !important; filter: brightness(1.06); }
-        .cloud-panel-toggle.active { transform: none !important; background: rgba(139, 92, 246, 0.18); color: #ffffff; border-color: var(--accent); box-shadow: 0 0 12px rgba(139, 92, 246, 0.22); }
-        .cloud-panel-toggle:active { transform: scale(0.96) !important; }
+        .cloud-action-buttons { grid-column: 3; grid-row: 1; z-index: 1; display: none; align-items: center; gap: 8px; }
+        .cloud-action-buttons.active { display: flex; }
+        .cloud-action-btn { width: 46px; height: 46px; min-width: 46px; border-radius: 15px; border: 1px solid rgba(148, 163, 184, 0.34); background: rgba(148, 163, 184, 0.10); color: #e2e8f0; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 20px; font-weight: 950; line-height: 1; box-shadow: none; }
+        .cloud-action-btn:hover { filter: brightness(1.08); }
         .character-list { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 22px; }
         @media (min-width: 1000px) { .character-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .character-card { border: 1px solid var(--border); background: rgba(255,255,255,0.04); border-radius: 22px; padding: 16px 18px; display: grid; grid-template-columns: 24px 82px minmax(0, 1fr) 46px; gap: 14px; align-items: center; cursor: pointer; min-height: 126px; user-select: none; }
@@ -906,6 +906,15 @@
         .cloud-auth-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .cloud-auth-btn { min-height: 38px; border-radius: 12px; border: 1px solid var(--border); padding: 0 12px; background: rgba(255,255,255,0.06); color: var(--text); font-weight: 900; cursor: pointer; }
         .cloud-auth-btn.primary { background: var(--accent); color: #ffffff; border-color: rgba(255,255,255,0.12); }
+        .account-modal { text-align: center; }
+        .account-modal h3 { margin-bottom: 14px; }
+        #account-login-view, #account-profile-view { display: none; }
+        #account-login-view.active, #account-profile-view.active { display: block; }
+        .account-avatar-preview { width: 112px; height: 112px; margin: 0 auto 12px; border-radius: 24px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .account-avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .account-nickname-label { margin-bottom: 14px; font-size: 20px; font-weight: 900; }
+        .cloud-confirm-modal p { color: var(--text-dim); font-size: 14px; line-height: 1.4; margin: 8px 0 16px; }
+        .cloud-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .character-menu-toolbar { border: 1px solid var(--border); background: rgba(255,255,255,0.04); border-radius: 20px; padding: 10px 12px 10px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; min-height: 60px; }
         .character-count { color: var(--text); font-size: 20px; font-weight: 950; letter-spacing: 0.035em; text-transform: uppercase; white-space: nowrap; line-height: 1; }
         .character-toolbar-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
@@ -939,7 +948,8 @@
             .site-icon-mark { width: 50px; height: 50px; min-width: 50px; padding: 0; }
             .site-icon-mark img { width: 50px; height: 50px; border-radius: 11px; }
             .app-version-mark { right: 26px; bottom: 10px; font-size: 10px; }
-            .cloud-panel-toggle { width: 42px; height: 42px; min-width: 42px; border-radius: 14px; font-size: 19px; }
+            .cloud-action-buttons { gap: 7px; }
+            .cloud-action-btn { width: 42px; height: 42px; min-width: 42px; border-radius: 14px; font-size: 19px; }
             .cloud-auth-bar.open { display: flex; align-items: stretch; flex-direction: column; }
             .cloud-auth-actions { display: grid; grid-template-columns: 1fr 1fr; }
             .cloud-auth-btn { width: 100%; }

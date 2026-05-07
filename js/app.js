@@ -5,6 +5,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const MAX_CHARACTERS = 10;
     const SUPABASE_URL = 'https://jgrhmzbzojxsybghirrt.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_cE3BBpoZlXM-cYx2DC9gnQ_h4fZqiI5';
+    const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
     const ROUTE_MENU_HASH = '#characters';
     const ROUTE_CHARACTER_PREFIX = '#character=';
@@ -22,6 +23,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let cloudSyncTimer = null;
     let cloudLoading = false;
     let cloudAuthPanelOpen = false;
+    let pendingCloudDownloadSnapshot = null;
 
     let currentPage = 0;
     const totalPages = 6;
@@ -5098,316 +5100,333 @@ ${getCleanFeatType(slot.type)}`;
         appRouteReady = true;
     }
 
-    function updateCloudAuthUI(message = '') {
-        const authStatus = document.getElementById('cloud-auth-status');
-        const syncStatus = document.getElementById('cloud-sync-status');
-        const loginBtn = document.getElementById('cloud-login-btn');
-        const logoutBtn = document.getElementById('cloud-logout-btn');
-        const userName = cloudUser?.user_metadata?.name || cloudUser?.email || '';
-        if (authStatus) authStatus.innerText = cloudUser ? `Облако: ${userName}` : 'Локальное сохранение';
-        if (syncStatus) syncStatus.innerText = message || (cloudUser ? 'Персонажи синхронизируются с Supabase' : 'Войдите через Google для синхронизации');
-        if (loginBtn) loginBtn.style.display = cloudUser ? 'none' : '';
-        if (logoutBtn) logoutBtn.style.display = cloudUser ? '' : 'none';
-        setCloudAuthPanelOpen(cloudAuthPanelOpen);
+    function normalizeAccountNickname(value) {
+        return String(value || '').trim().replace(/\s+/g, ' ');
     }
 
-    function setCloudAuthPanelOpen(open) {
-        cloudAuthPanelOpen = !!open;
-        const bar = document.getElementById('cloud-auth-bar');
-        const toggle = document.getElementById('cloud-panel-toggle');
-        if (bar) bar.classList.toggle('open', cloudAuthPanelOpen);
-        if (toggle) {
-            toggle.classList.toggle('active', cloudAuthPanelOpen);
-            toggle.setAttribute('aria-expanded', cloudAuthPanelOpen ? 'true' : 'false');
+    function accountStorageKey(nickname) {
+        return normalizeAccountNickname(nickname).toLowerCase();
+    }
+
+    function hashAccountToUuid(nickname) {
+        const source = `IntListPC:${accountStorageKey(nickname)}`;
+        let a = 0x811c9dc5, b = 0x9e3779b9, c = 0x85ebca6b, d = 0xc2b2ae35;
+        for (let i = 0; i < source.length; i++) {
+            const code = source.charCodeAt(i);
+            a = Math.imul(a ^ code, 16777619);
+            b = Math.imul(b ^ code, 2246822519);
+            c = Math.imul(c ^ code, 3266489917);
+            d = Math.imul(d ^ code, 668265263);
+        }
+        const hex = [a, b, c, d].map(n => (n >>> 0).toString(16).padStart(8, '0')).join('');
+        const variant = ((parseInt(hex[16], 16) & 3) | 8).toString(16);
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+    }
+
+    function readAccountProfile() {
+        try {
+            const raw = localStorage.getItem(ACCOUNT_PROFILE_KEY);
+            if (!raw) return null;
+            const profile = JSON.parse(raw);
+            const nickname = normalizeAccountNickname(profile?.nickname);
+            if (!nickname) return null;
+            return {
+                id: profile.id || hashAccountToUuid(nickname),
+                nickname,
+                avatar: profile.avatar || ''
+            };
+        } catch (e) {
+            console.warn('Account profile read error', e);
+            return null;
         }
     }
 
-    function toggleCloudAuthPanel() {
-        setCloudAuthPanelOpen(!cloudAuthPanelOpen);
+    function writeAccountProfile(profile) {
+        if (!profile) {
+            safeStorageRemove(ACCOUNT_PROFILE_KEY);
+            return;
+        }
+        safeStorageSet(ACCOUNT_PROFILE_KEY, JSON.stringify(profile), false);
+    }
+
+    function getDefaultProfileIcon() {
+        return 'assets/icons/favicon.png';
+    }
+
+    function updateAccountUI(message = '') {
+        const profile = cloudUser || readAccountProfile();
+        if (profile && !cloudUser) cloudUser = profile;
+        const icon = document.getElementById('profile-icon-img');
+        const avatarPreview = document.getElementById('account-avatar-img');
+        const nicknameLabel = document.getElementById('account-nickname-label');
+        const loginView = document.getElementById('account-login-view');
+        const profileView = document.getElementById('account-profile-view');
+        const actions = document.getElementById('cloud-action-buttons');
+        const avatar = profile?.avatar || getDefaultProfileIcon();
+        if (icon) icon.src = avatar;
+        if (avatarPreview) avatarPreview.src = avatar;
+        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || '';
+        if (loginView) loginView.classList.toggle('active', !profile);
+        if (profileView) profileView.classList.toggle('active', !!profile);
+        if (actions) actions.classList.toggle('active', !!profile);
+        updateCloudAuthUI(message);
+    }
+
+    function openAccountProfile() {
+        cloudUser = readAccountProfile();
+        updateAccountUI();
+        openModal('accountModal');
+        if (!cloudUser) {
+            const input = document.getElementById('account-nickname-input');
+            if (input) setTimeout(() => input.focus(), 50);
+        }
+    }
+
+    function loginNicknameAccount() {
+        const input = document.getElementById('account-nickname-input');
+        const nickname = normalizeAccountNickname(input?.value || '');
+        if (!nickname) {
+            alert('Введите ник.');
+            return;
+        }
+        cloudUser = { id: hashAccountToUuid(nickname), nickname, avatar: readAccountProfile()?.avatar || '' };
+        writeAccountProfile(cloudUser);
+        if (input) input.value = '';
+        updateAccountUI('Аккаунт открыт');
+        closeModal('accountModal');
+    }
+
+    function logoutNicknameAccount() {
+        cloudUser = null;
+        writeAccountProfile(null);
+        updateAccountUI('Аккаунт закрыт');
+        closeModal('accountModal');
+    }
+
+    function handleProfileAvatar(input) {
+        if (!cloudUser) {
+            openAccountProfile();
+            return;
+        }
+        if (!input.files || !input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const size = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+                canvas.width = 512;
+                canvas.height = 512;
+                ctx.drawImage(img, ((img.naturalWidth || img.width) - size) / 2, ((img.naturalHeight || img.height) - size) / 2, size, size, 0, 0, 512, 512);
+                cloudUser.avatar = canvas.toDataURL('image/jpeg', 0.86);
+                writeAccountProfile(cloudUser);
+                updateAccountUI('Аватарка профиля обновлена');
+                input.value = '';
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
     }
 
     function setCloudSyncStatus(message) {
         const syncStatus = document.getElementById('cloud-sync-status');
-        if (syncStatus) syncStatus.innerText = message;
+        const bar = document.getElementById('cloud-auth-bar');
+        if (syncStatus) syncStatus.innerText = message || '';
+        if (bar) bar.classList.toggle('open', !!message);
     }
 
-    function getOAuthRedirectUrl() {
-        const url = new URL(window.location.href);
-        return `${url.origin}${url.pathname}`;
-    }
-
-    function clearOAuthReturnParams() {
-        const url = new URL(window.location.href);
-        let changed = false;
-        ['code', 'state', 'error', 'error_code', 'error_description', 'scope', 'authuser', 'prompt'].forEach(key => {
-            if (url.searchParams.has(key)) {
-                url.searchParams.delete(key);
-                changed = true;
-            }
-        });
-        if (url.hash) {
-            url.hash = '';
-            changed = true;
-        }
-        if (changed) window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
-    }
-
-    function getSheetUpdatedAt(sheet) {
-        const ts = Number(sheet?.[LOCAL_SHEET_UPDATED_AT_KEY] || 0);
-        return Number.isFinite(ts) ? ts : 0;
-    }
-
-    async function finishOAuthReturnIfNeeded() {
-        const url = new URL(window.location.href);
-        const authCode = url.searchParams.get('code');
-        const authError = url.searchParams.get('error_description') || url.searchParams.get('error');
-        if (authError) {
-            updateCloudAuthUI(`Ошибка входа: ${authError}`);
-            clearOAuthReturnParams();
-            return;
-        }
-        if (!authCode || !supabaseClient) return;
-        setCloudSyncStatus('Завершаю вход...');
-        const { data, error } = await supabaseClient.auth.exchangeCodeForSession(authCode);
-        if (error) {
-            console.warn('Supabase OAuth callback error', error);
-            updateCloudAuthUI('Не удалось завершить вход через Google');
-            clearOAuthReturnParams();
-            return;
-        }
-        cloudUser = data?.session?.user || cloudUser;
-        clearOAuthReturnParams();
+    function updateCloudAuthUI(message = '') {
+        const authStatus = document.getElementById('cloud-auth-status');
+        if (authStatus) authStatus.innerText = cloudUser ? `Аккаунт: ${cloudUser.nickname}` : 'Войдите по нику через иконку профиля';
+        setCloudSyncStatus(message);
     }
 
     async function initSupabase() {
+        cloudUser = readAccountProfile();
+        updateAccountUI();
         if (!window.supabase?.createClient) {
-            updateCloudAuthUI('Supabase недоступен, работает локальное сохранение');
+            updateCloudAuthUI('Supabase недоступен, облако выключено');
             return;
         }
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' }
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
         });
-        await finishOAuthReturnIfNeeded();
-        const { data, error } = await supabaseClient.auth.getSession();
-        if (error) {
-            console.warn('Supabase session error', error);
-            updateCloudAuthUI('Не удалось проверить вход, работаем локально');
-            return;
+        updateAccountUI();
+    }
+
+    function requireNicknameAccount() {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser) {
+            openAccountProfile();
+            return false;
         }
-        cloudUser = data?.session?.user || null;
-        updateCloudAuthUI();
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            cloudUser = session?.user || null;
-            if (!cloudUser && event !== 'SIGNED_OUT') {
-                updateCloudAuthUI('Войдите через Google для синхронизации');
-                characters = readCharacters();
-                renderCharacterMenu();
-                return;
-            }
-            updateCloudAuthUI(cloudUser ? 'Загружаю персонажей...' : 'Вы вышли, включено локальное сохранение');
-            if (cloudUser) await loadCloudCharacters(true);
-            else {
-                characters = readCharacters();
-                renderCharacterMenu();
-            }
+        return true;
+    }
+
+    function buildAccountSnapshot() {
+        if (activeCharacterId) saveAll(false);
+        const list = readCharacters().slice(0, MAX_CHARACTERS);
+        const snapshotCharacters = list.map((ch, index) => {
+            const sheet = normalizeLoadedSheet(readCharacterSheet(ch.id) || createBlankSheetData(ch.name || `Персонаж ${index + 1}`));
+            const avatar = localStorage.getItem(characterAvatarKey(ch.id)) || ch.avatar || '';
+            return { id: String(ch.id || makeCharacterId()), sheet, avatar };
         });
-        if (cloudUser) await loadCloudCharacters(false);
-    }
-
-    async function signInWithGoogle() {
-        if (!supabaseClient) {
-            alert('Supabase не загрузился. Проверь интернет и открой страницу заново.');
-            return;
-        }
-        setCloudSyncStatus('Открываю вход через Google...');
-        const options = {
-            redirectTo: getOAuthRedirectUrl(),
-            queryParams: { prompt: 'select_account' },
-            skipBrowserRedirect: true
-        };
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options });
-        if (error) {
-            console.warn('Google sign in error', error);
-            alert('Не удалось открыть вход через Google.');
-            return;
-        }
-        if (data?.url) {
-            window.location.assign(data.url);
-        } else {
-            alert('Supabase не вернул ссылку для входа через Google.');
-        }
-    }
-
-    async function signOutCloud() {
-        if (!supabaseClient) return;
-        await flushCloudSave();
-        const { error } = await supabaseClient.auth.signOut();
-        if (error) {
-            console.warn('Supabase sign out error', error);
-            alert('Не удалось выйти из аккаунта.');
-            return;
-        }
-        cloudUser = null;
-        characters = readCharacters();
-        updateCloudAuthUI();
-        renderCharacterMenu();
-    }
-
-    function cloudRowToCharacter(row) {
-        const sheet = normalizeLoadedSheet(row.sheet || {});
-        const meta = getCharacterMetaFromSheet(sheet);
         return {
-            id: row.id,
-            name: row.name || meta.name,
-            meta: meta.meta,
-            updatedAt: row.updated_at ? Date.parse(row.updated_at) || Date.now() : Date.now(),
-            cloud: true
+            version: 1,
+            nickname: cloudUser.nickname,
+            profileAvatar: cloudUser.avatar || '',
+            savedAt: new Date().toISOString(),
+            characters: snapshotCharacters
         };
+    }
+
+    async function saveAccountToCloud() {
+        if (!requireNicknameAccount()) return;
+        if (!supabaseClient) {
+            updateCloudAuthUI('Supabase недоступен, сохранить в облако не удалось');
+            return;
+        }
+        const snapshot = buildAccountSnapshot();
+        setCloudSyncStatus('Сохраняю всё в облако...');
+        const nicknameKey = accountStorageKey(cloudUser.nickname);
+        const payload = {
+            nickname_key: nicknameKey,
+            nickname: cloudUser.nickname,
+            profile_avatar: cloudUser.avatar || '',
+            data: snapshot,
+            updated_at: new Date().toISOString()
+        };
+        const { data: existingRows, error: findError } = await supabaseClient
+            .from('account_backups')
+            .select('nickname_key')
+            .eq('nickname_key', nicknameKey)
+            .limit(1);
+        if (findError) {
+            console.warn('Cloud account lookup error', findError);
+            updateCloudAuthUI('Не удалось найти облачную запись для ника');
+            return;
+        }
+        const existingKey = existingRows?.[0]?.nickname_key;
+        const request = existingKey
+            ? supabaseClient.from('account_backups').update(payload).eq('nickname_key', existingKey)
+            : supabaseClient.from('account_backups').insert(payload);
+        const { error } = await request;
+        if (error) {
+            console.warn('Cloud account save error', error);
+            updateCloudAuthUI('Не удалось сохранить в облако');
+            return;
+        }
+        updateCloudAuthUI('Сохранено в облако');
+    }
+
+    async function requestLoadAccountFromCloud() {
+        if (!requireNicknameAccount()) return;
+        if (!supabaseClient) {
+            updateCloudAuthUI('Supabase недоступен, загрузить облако не удалось');
+            return;
+        }
+        setCloudSyncStatus('Ищу данные в облаке...');
+        const nicknameKey = accountStorageKey(cloudUser.nickname);
+        const { data, error } = await supabaseClient
+            .from('account_backups')
+            .select('data,profile_avatar,updated_at')
+            .eq('nickname_key', nicknameKey)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+        if (error) {
+            console.warn('Cloud account load error', error);
+            updateCloudAuthUI('Не удалось загрузить данные облака');
+            return;
+        }
+        const snapshot = data?.[0]?.data || null;
+        if (!snapshot || !Array.isArray(snapshot.characters)) {
+            updateCloudAuthUI('В облаке нет данных для этого ника');
+            return;
+        }
+        pendingCloudDownloadSnapshot = snapshot;
+        const hasLocalCharacters = readCharacters().length > 0;
+        if (hasLocalCharacters) openModal('cloudConfirmModal');
+        else confirmCloudDownload(true);
+    }
+
+    function confirmCloudDownload(shouldApply) {
+        closeModal('cloudConfirmModal');
+        if (!shouldApply) {
+            pendingCloudDownloadSnapshot = null;
+            updateCloudAuthUI('Загрузка отменена');
+            return;
+        }
+        if (!pendingCloudDownloadSnapshot) return;
+        applyCloudSnapshot(pendingCloudDownloadSnapshot);
+        pendingCloudDownloadSnapshot = null;
+    }
+
+    function applyCloudSnapshot(snapshot) {
+        if (activeCharacterId) saveAll(false);
+        readCharacters().forEach(ch => {
+            safeStorageRemove(characterSheetKey(ch.id));
+            safeStorageRemove(characterAvatarKey(ch.id));
+        });
+        const incoming = (snapshot.characters || []).slice(0, MAX_CHARACTERS);
+        characters = incoming.map((item, index) => {
+            const id = String(item.id || makeCharacterId());
+            const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData(`Персонаж ${index + 1}`));
+            const avatar = item.avatar || '';
+            writeCharacterSheet(id, sheet);
+            if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
+            else safeStorageRemove(characterAvatarKey(id));
+            return { id, ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() };
+        });
+        if (snapshot.profileAvatar && cloudUser) {
+            cloudUser.avatar = snapshot.profileAvatar;
+            writeAccountProfile(cloudUser);
+        }
+        activeCharacterId = characters[0]?.id || null;
+        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+        writeCharacters();
+        document.body.classList.add('main-menu-open');
+        renderCharacterMenu();
+        updateAccountUI('Данные облака загружены');
+        if (appRouteReady) setRoute('menu', null, true);
+    }
+    function cloudRowToCharacter(row) {
+        const sheet = normalizeLoadedSheet(row?.sheet || {});
+        return { id: row?.id || makeCharacterId(), ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() };
     }
 
     function cacheCloudRows(rows) {
-        const localOrder = readCharacters().map(ch => String(ch.id));
-        const orderedRows = rows.slice().sort((a, b) => {
-            const ai = localOrder.indexOf(String(a.id));
-            const bi = localOrder.indexOf(String(b.id));
-            if (ai === -1 && bi === -1) return 0;
-            if (ai === -1) return 1;
-            if (bi === -1) return -1;
-            return ai - bi;
-        });
-        const cloudCharacters = orderedRows.slice(0, MAX_CHARACTERS).map(row => {
-            const cloudSheet = normalizeLoadedSheet(row.sheet || {});
-            let localSheet = null;
-            localSheet = readCharacterSheet(row.id);
-            const localUpdatedAt = getSheetUpdatedAt(localSheet);
-            const cloudUpdatedAt = row.updated_at ? Date.parse(row.updated_at) || 0 : 0;
-            const shouldKeepLocal = localUpdatedAt > cloudUpdatedAt;
-            const sheet = shouldKeepLocal ? normalizeLoadedSheet(localSheet || cloudSheet) : cloudSheet;
-            writeCharacterSheet(row.id, sheet);
-            if (row.avatar) safeStorageSet(characterAvatarKey(row.id), row.avatar, false);
-            else safeStorageRemove(characterAvatarKey(row.id));
-            if (shouldKeepLocal) return { ...cloudRowToCharacter(row), ...getCharacterMetaFromSheet(sheet), updatedAt: localUpdatedAt };
-            return cloudRowToCharacter(row);
-        });
-        characters = cloudCharacters;
-        writeCharacters();
+        return rows || [];
     }
 
-    async function uploadLocalCharactersToCloud(localList, freeSlots) {
-        const uploaded = [];
-        for (const ch of localList.slice(0, freeSlots)) {
-            let sheet = null;
-            sheet = normalizeLoadedSheet(readCharacterSheet(ch.id) || createBlankSheetData(ch.name || 'Герой'));
-            const avatar = localStorage.getItem(characterAvatarKey(ch.id)) || '';
-            const row = await createCloudCharacter(sheet, avatar);
-            if (row) uploaded.push(row);
-        }
-        return uploaded;
+    async function uploadLocalCharactersToCloud() {
+        return [];
     }
 
-    async function loadCloudCharacters(reloadCurrent = true) {
-        if (!supabaseClient || !cloudUser) return;
-        cloudLoading = true;
-        const localBeforeCloud = readCharacters().filter(ch => !isUuid(ch.id));
-        setCloudSyncStatus('Загружаю персонажей...');
-        const { data, error } = await supabaseClient
-            .from('characters')
-            .select('id,name,sheet,avatar,updated_at')
-            .order('updated_at', { ascending: false });
-        cloudLoading = false;
-        if (error) {
-            console.warn('Supabase load characters error', error);
-            updateCloudAuthUI('Не удалось загрузить облако, открыт локальный кэш');
-            characters = readCharacters();
-            renderCharacterMenu();
-            return;
-        }
-        let rows = data || [];
-        if (localBeforeCloud.length && rows.length < MAX_CHARACTERS) {
-            setCloudSyncStatus('Переношу локальных персонажей в облако...');
-            const uploaded = await uploadLocalCharactersToCloud(localBeforeCloud, MAX_CHARACTERS - rows.length);
-            rows = [...uploaded, ...rows].slice(0, MAX_CHARACTERS);
-        }
-        cacheCloudRows(rows);
-        const savedActive = localStorage.getItem(ACTIVE_CHARACTER_KEY);
-        if (!activeCharacterId && savedActive && characters.some(ch => String(ch.id) === String(savedActive))) activeCharacterId = savedActive;
-        if (!activeCharacterId || !characters.some(ch => String(ch.id) === String(activeCharacterId))) activeCharacterId = characters[0]?.id || null;
-        if (activeCharacterId) safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId, false);
-        updateCloudAuthUI('Облако загружено');
-        renderCharacterMenu();
-        if (reloadCurrent && activeCharacterId && !document.body.classList.contains('main-menu-open')) loadAll(false);
-        if (appRouteReady && document.body.classList.contains('main-menu-open')) applyRouteFromLocation(true);
+    async function loadCloudCharacters() {
+        return;
     }
 
-    async function createCloudCharacter(sheet, avatar = '') {
-        if (!supabaseClient || !cloudUser) return null;
-        const meta = getCharacterMetaFromSheet(sheet);
-        const { data, error } = await supabaseClient
-            .from('characters')
-            .insert({ user_id: cloudUser.id, name: meta.name, sheet, avatar })
-            .select('id,name,sheet,avatar,updated_at')
-            .single();
-        if (error) {
-            console.warn('Supabase create character error', error);
-            alert('Не удалось создать персонажа в облаке. Создам локально.');
-            return null;
-        }
-        return data;
+    async function createCloudCharacter() {
+        return null;
     }
 
-    async function ensureCloudCharacter(id, sheet, avatar = '') {
-        if (!cloudUser || !supabaseClient) return id;
-        if (isUuid(id)) return id;
-        const row = await createCloudCharacter(sheet, avatar);
-        if (!row) return id;
-        const oldId = id;
-        const newId = row.id;
-        writeCharacterSheet(newId, normalizeLoadedSheet(row.sheet || sheet));
-        if (avatar || row.avatar) safeStorageSet(characterAvatarKey(newId), row.avatar || avatar, false);
-        characters = characters.map(ch => String(ch.id) === String(oldId) ? cloudRowToCharacter(row) : ch);
-        if (String(activeCharacterId) === String(oldId)) activeCharacterId = newId;
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
-        writeCharacters();
-        return newId;
+    async function ensureCloudCharacter(id) {
+        return id;
     }
 
-    function scheduleCloudSave(sheet = null) {
-        if (cloudLoading || !cloudUser || !supabaseClient || !activeCharacterId) return;
-        clearTimeout(cloudSyncTimer);
-        const id = activeCharacterId;
-        const payload = sheet || captureSheetState();
-        cloudSyncTimer = setTimeout(() => saveCharacterToCloud(id, payload), 700);
+    function scheduleCloudSave() {
+        return;
     }
 
     async function flushCloudSave() {
-        if (!cloudSyncTimer) return;
-        clearTimeout(cloudSyncTimer);
+        if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
         cloudSyncTimer = null;
-        if (cloudUser && supabaseClient && activeCharacterId) await saveCharacterToCloud(activeCharacterId, captureSheetState());
     }
 
-    async function saveCharacterToCloud(id, sheet) {
-        if (!cloudUser || !supabaseClient || !id) return;
-        setCloudSyncStatus('Сохраняю...');
-        const avatar = localStorage.getItem(characterAvatarKey(id)) || '';
-        const cloudId = await ensureCloudCharacter(id, sheet, avatar);
-        const meta = getCharacterMetaFromSheet(sheet);
-        const { error } = await supabaseClient
-            .from('characters')
-            .update({ name: meta.name, sheet, avatar, updated_at: new Date().toISOString() })
-            .eq('id', cloudId);
-        if (error) {
-            console.warn('Supabase save character error', error);
-            updateCloudAuthUI('Не удалось сохранить в облако, локальная копия сохранена');
-            return;
-        }
-        const idx = characters.findIndex(ch => String(ch.id) === String(cloudId));
-        if (idx >= 0) characters[idx] = { ...characters[idx], ...meta, updatedAt: Date.now(), cloud: true };
-        writeCharacters();
-        updateCloudAuthUI('Сохранено в облако');
-        renderCharacterMenu();
+    async function saveCharacterToCloud() {
+        return;
     }
-
     function createBlankSheetData(name = 'Новый герой') {
         const defaultLevel = 1;
         const defaultCon = 0;
@@ -5737,14 +5756,6 @@ ${getCleanFeatType(slot.type)}`;
 
     async function deleteCharacter(id) {
         if (!characterDeleteSelectMode) return;
-        if (cloudUser && supabaseClient && isUuid(id)) {
-            const { error } = await supabaseClient.from('characters').delete().eq('id', id);
-            if (error) {
-                console.warn('Supabase delete character error', error);
-                alert('Не удалось удалить персонажа из облака.');
-                return;
-            }
-        }
         safeStorageRemove(characterSheetKey(id));
         safeStorageRemove(characterAvatarKey(id));
         characters = characters.filter(ch => String(ch.id) !== String(id));

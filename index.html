@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>IntListPC</title>
     <link rel="icon" type="image/png" href="assets/icons/favicon.png">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="main-menu-open app-booting">
@@ -34,8 +33,11 @@
     <div class="character-menu-inner">
         <div class="character-menu-header">
             <h1 class="character-menu-title">Персонажи</h1>
-            <div class="site-icon-mark" aria-hidden="true"><img src="assets/icons/favicon.png" alt=""></div>
-            <button type="button" id="cloud-panel-toggle" class="cloud-panel-toggle" onclick="toggleCloudAuthPanel()" title="Google" aria-label="Google" aria-expanded="false">G</button>
+            <button type="button" class="site-icon-mark" onclick="openAccountProfile()" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
+            <div id="cloud-action-buttons" class="cloud-action-buttons">
+                <button type="button" id="cloud-save-btn" class="cloud-action-btn" onclick="saveAccountToCloud()" title="Сохранить в облако">S</button>
+                <button type="button" id="cloud-download-btn" class="cloud-action-btn" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака">D</button>
+            </div>
         </div>
         <div id="cloud-auth-bar" class="cloud-auth-bar">
             <div class="cloud-auth-text">
@@ -43,8 +45,6 @@
                 <div id="cloud-sync-status" class="cloud-sync-status">Supabase подключается после входа</div>
             </div>
             <div class="cloud-auth-actions">
-                <button type="button" id="cloud-login-btn" class="cloud-auth-btn primary" onclick="signInWithGoogle()">Google</button>
-                <button type="button" id="cloud-logout-btn" class="cloud-auth-btn" onclick="signOutCloud()" style="display:none">Выйти</button>
             </div>
         </div>
         <div class="character-menu-toolbar">
@@ -58,6 +58,33 @@
         <div class="app-version-mark">IntListPC v1.0<br>by RubiDus</div>
     </div>
 </div>
+
+<div id="accountModal" class="modal"><div class="modal-content account-modal">
+    <h3>Профиль</h3>
+    <div id="account-login-view">
+        <label class="l">Ник</label>
+        <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите ник">
+        <button type="button" onclick="loginNicknameAccount()" class="btn-primary">ВОЙТИ</button>
+    </div>
+    <div id="account-profile-view">
+        <div class="account-avatar-preview"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></div>
+        <div id="account-nickname-label" class="account-nickname-label"></div>
+        <button type="button" onclick="document.getElementById('profileAvatarInput').click()" class="btn-primary">СМЕНИТЬ АВАТАРКУ</button>
+        <button type="button" onclick="logoutNicknameAccount()" class="btn-sec">ВЫЙТИ</button>
+    </div>
+    <button type="button" onclick="closeModal('accountModal')" class="btn-sec">ЗАКРЫТЬ</button>
+</div></div>
+
+<div id="cloudConfirmModal" class="modal"><div class="modal-content cloud-confirm-modal">
+    <h3>Загрузить облако?</h3>
+    <p>Если вы нажмёте Да, все текущие персонажи будут удалены и загружены данные облака, вы уверены?</p>
+    <div class="cloud-confirm-actions">
+        <button type="button" onclick="confirmCloudDownload(true)" class="btn-primary">ДА</button>
+        <button type="button" onclick="confirmCloudDownload(false)" class="btn-sec">НЕТ</button>
+    </div>
+</div></div>
+
+<input type="file" id="profileAvatarInput" style="display:none" onchange="handleProfileAvatar(this)" accept="image/*">
 
 <div class="fixed-header">
     <div class="main-wrapper">

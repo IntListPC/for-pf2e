@@ -5663,6 +5663,13 @@ ${getCleanFeatType(slot.type)}`;
         document.body.classList.toggle('cloud-busy', !!active);
     }
 
+    function forcePersistCurrentAccountLocally() {
+        if (activeCharacterId) saveCharacterSnapshotById(activeCharacterId, false);
+        characters = readCharacters();
+        writeCharacters();
+        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+    }
+
     async function saveAccountToCloud(options = {}) {
         if (!requireNicknameAccount()) return false;
         if (cloudLoading) return false;
@@ -5690,6 +5697,7 @@ ${getCleanFeatType(slot.type)}`;
                 updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
                 return false;
             }
+            forcePersistCurrentAccountLocally();
             updateCloudAuthUI('Сохранение в облако');
             return true;
         } finally {
@@ -5743,28 +5751,40 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function applyCloudSnapshot(snapshot) {
-        if (activeCharacterId) saveAll(false);
-        readCharacters().forEach(ch => {
-            safeStorageRemove(characterSheetKey(ch.id));
-            safeStorageRemove(characterAvatarKey(ch.id));
-        });
-        const incoming = (snapshot.characters || []).slice(0, MAX_CHARACTERS);
-        characters = incoming.map((item, index) => {
-            const id = String(item.id || makeCharacterId());
-            const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData(`Персонаж ${index + 1}`));
-            const avatar = item.avatar || '';
-            writeCharacterSheet(id, sheet);
-            if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
-            else safeStorageRemove(characterAvatarKey(id));
-            return { id, ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() };
-        });
-        if (snapshot.profileAvatar && cloudUser) {
-            cloudUser.avatar = snapshot.profileAvatar;
-            writeAccountProfile(cloudUser);
+        const previousLoadingState = isLoadingSheet;
+        const oldCharacters = readCharacters();
+        isLoadingSheet = true;
+        try {
+            oldCharacters.forEach(ch => {
+                safeStorageRemove(characterSheetKey(ch.id));
+                safeStorageRemove(characterAvatarKey(ch.id));
+            });
+            const incoming = (snapshot.characters || []).slice(0, MAX_CHARACTERS);
+            characters = incoming.map((item, index) => {
+                const id = String(item.id || makeCharacterId());
+                const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData(`Персонаж ${index + 1}`));
+                sheet._characterId = id;
+                const avatar = item.avatar || '';
+                writeCharacterSheet(id, sheet);
+                if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
+                else safeStorageRemove(characterAvatarKey(id));
+                return { id, ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() };
+            });
+            if (snapshot.profileAvatar && cloudUser) {
+                cloudUser.avatar = snapshot.profileAvatar;
+                writeAccountProfile(cloudUser);
+            }
+            activeCharacterId = characters[0]?.id || null;
+            writeCharacters();
+            safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+        } finally {
+            isLoadingSheet = previousLoadingState;
         }
-        activeCharacterId = characters[0]?.id || null;
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
-        writeCharacters();
+
+        if (activeCharacterId) {
+            const activeSheet = readCharacterSheet(activeCharacterId) || createBlankSheetData();
+            loadSheetData(activeSheet);
+        }
         document.body.classList.add('main-menu-open');
         renderCharacterMenu();
         updateAccountUI('Данные облака загружены');

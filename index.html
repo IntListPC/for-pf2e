@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.01e">
+    <link rel="stylesheet" href="css/styles.css?v=1.01f">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -39,7 +39,6 @@
                 <button type="button" class="site-icon-mark" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
                 <div class="account-header-info">
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
-                    <div id="account-header-meta" class="account-header-meta"></div>
                 </div>
             </div>
             <h1 class="character-menu-title">Персонажи</h1>
@@ -50,12 +49,13 @@
         </div>
         <div class="character-menu-toolbar">
             <div id="character-count" class="character-count">0/10</div>
+            <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
             <div class="character-toolbar-actions">
                 <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick()" title="Загрузить персонажа" aria-label="Загрузить персонажа"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button>
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.01e<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01f<br>by RubiDus</div>
     </div>
 </div>
 
@@ -999,7 +999,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.01e"></script>
+<script src="js/app.js?v=1.01f"></script>
 
 <div class="footer-spacer"></div>
 </body>

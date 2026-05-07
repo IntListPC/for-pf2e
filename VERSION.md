@@ -1,7 +1,7 @@
 # IntListPC Version Notes
 
-Current version: `1.01`
+Current version: `1.01b`
 
-`1.01` - Account menu visibility cleaned up: create/login only when logged out, logout/autosync only when logged in, account hints hidden unless they are errors.
+`1.01b` - Account cloud status now appears under the account name with spinner and fades out; cloud buttons have animated arrows; character cards use a three-dot context menu with download, clone, and staged delete; global delete button removed; JSON upload button confirms staged deletes; account form hints removed; add-card plus adjusted.
 
-Previous line: `1.0a-7` - Account header redesigned; account create/login separated; manual cloud download and optional auto-save on main-menu exit added.
+Previous line: `1.01a` - Account avatar change moved onto the avatar itself; logout now saves to Yandex Cloud first and then clears all local characters.

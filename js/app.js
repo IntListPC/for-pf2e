@@ -13,6 +13,8 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let characters = [];
     let activeCharacterId = null;
     let characterDeleteSelectMode = false;
+    let characterPendingDeleteIds = new Set();
+    let characterMenuOpenId = null;
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -23,6 +25,9 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let cloudLoading = false;
     let cloudAuthPanelOpen = false;
     let pendingCloudDownloadSnapshot = null;
+    let accountStatusState = { message: '', loading: false, error: false, fading: false };
+    let accountStatusFadeTimer = null;
+    let accountStatusClearTimer = null;
 
     let currentPage = 0;
     const totalPages = 6;
@@ -5168,6 +5173,14 @@ ${getCleanFeatType(slot.type)}`;
         return /не удалось|ошиб|не найден|существует|сначала|проверь|не ответил|нет данных|не подтвердило|недоступен|отказ|forbidden|failed|error/i.test(text);
     }
 
+    function normalizeAccountActivityMessage(message = '') {
+        const text = String(message || '').trim();
+        if (!text) return '';
+        if (/сохран|save|upload|выгруз/i.test(text)) return 'Сохранение в облако';
+        if (/загруз|load|download|ищу|провер|профиль|вход|создан/i.test(text)) return 'Загрузка из облака';
+        return text;
+    }
+
     function setOptionalAccountText(el, text = '') {
         if (!el) return;
         const clean = String(text || '').trim();
@@ -5175,17 +5188,67 @@ ${getCleanFeatType(slot.type)}`;
         el.style.display = clean ? '' : 'none';
     }
 
+    function renderAccountStatus() {
+        const headerMeta = document.getElementById('account-header-meta');
+        if (!headerMeta) return;
+        const state = accountStatusState || {};
+        const clean = String(state.message || '').trim();
+        headerMeta.innerText = clean;
+        headerMeta.style.display = clean ? '' : 'none';
+        headerMeta.classList.toggle('loading', !!(clean && state.loading));
+        headerMeta.classList.toggle('error', !!(clean && state.error));
+        headerMeta.classList.toggle('fading', !!(clean && state.fading));
+    }
+
+    function clearAccountStatusTimers() {
+        if (accountStatusFadeTimer) clearTimeout(accountStatusFadeTimer);
+        if (accountStatusClearTimer) clearTimeout(accountStatusClearTimer);
+        accountStatusFadeTimer = null;
+        accountStatusClearTimer = null;
+    }
+
+    function setAccountHeaderStatus(message = '', options = {}) {
+        clearAccountStatusTimers();
+        const clean = String(message || '').trim();
+        accountStatusState = {
+            message: clean,
+            loading: !!options.loading,
+            error: !!options.error,
+            fading: false
+        };
+        renderAccountStatus();
+        if (clean && !options.error && options.autoHide !== false) {
+            accountStatusFadeTimer = setTimeout(() => {
+                accountStatusState.fading = true;
+                renderAccountStatus();
+            }, options.fadeAfter || 4300);
+            accountStatusClearTimer = setTimeout(() => {
+                accountStatusState = { message: '', loading: false, error: false, fading: false };
+                renderAccountStatus();
+            }, options.clearAfter || 5000);
+        }
+    }
+
     function updateAccountSummary(message = '') {
         const profile = cloudUser || readAccountProfile();
         const headerName = document.getElementById('account-header-name');
-        const headerMeta = document.getElementById('account-header-meta');
         const modalInfo = document.getElementById('account-modal-info');
         const authStatus = document.getElementById('cloud-auth-status');
         const syncStatus = document.getElementById('cloud-sync-status');
-        const errorText = isAccountErrorMessage(message) ? String(message || '').trim() : '';
+        const cleanMessage = String(message || '').trim();
+        const errorText = isAccountErrorMessage(cleanMessage) ? cleanMessage : '';
         if (headerName) headerName.innerText = profile?.nickname || 'Локальный профиль';
-        setOptionalAccountText(headerMeta, errorText);
-        setOptionalAccountText(modalInfo, errorText);
+        if (errorText) {
+            setAccountHeaderStatus(errorText, { error: true, loading: false, autoHide: false });
+            setOptionalAccountText(modalInfo, errorText);
+        } else {
+            if (cleanMessage) {
+                setAccountHeaderStatus(normalizeAccountActivityMessage(cleanMessage), { loading: true, autoHide: true });
+            } else {
+                renderAccountStatus();
+            }
+            setOptionalAccountText(modalInfo, '');
+        }
         if (authStatus) authStatus.innerText = profile ? `Аккаунт: ${profile.nickname}` : 'Локальный профиль';
         if (syncStatus) syncStatus.innerText = errorText;
     }
@@ -5223,7 +5286,6 @@ ${getCleanFeatType(slot.type)}`;
         const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
         const autoSyncWrap = document.getElementById('account-auto-sync-wrap');
         const menuActions = document.getElementById('account-menu-actions');
-        const avatarChangeBtn = document.getElementById('account-avatar-change-btn');
         const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
@@ -5236,7 +5298,6 @@ ${getCleanFeatType(slot.type)}`;
         }
         if (autoSyncWrap) autoSyncWrap.style.display = loggedIn ? 'flex' : 'none';
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
-        if (avatarChangeBtn) avatarChangeBtn.style.display = loggedIn ? '' : 'none';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
         updateAccountSummary(message);
     }
@@ -5327,11 +5388,41 @@ ${getCleanFeatType(slot.type)}`;
         return loginExistingNicknameAccount();
     }
 
-    function logoutNicknameAccount() {
+    function clearLocalCharactersAfterLogout() {
+        if (activeCharacterId) saveAll(false);
+        readCharacters().forEach(ch => {
+            safeStorageRemove(characterSheetKey(ch.id));
+            safeStorageRemove(characterAvatarKey(ch.id));
+        });
+        characters = [];
+        activeCharacterId = null;
+        characterDeleteSelectMode = false;
+        characterPendingDeleteIds.clear();
+        characterMenuOpenId = null;
+        mobileReorderMode = null;
+        selectedMobileReorder = null;
+        suppressNextClickAfterReorder = false;
+        writeCharacters();
+        safeStorageRemove(ACTIVE_CHARACTER_KEY);
+    }
+
+    async function logoutNicknameAccount() {
+        cloudUser = cloudUser || readAccountProfile();
+        if (cloudUser) {
+            const saved = await saveAccountToCloud({ logout: true });
+            if (!saved) {
+                updateCloudAuthUI('Не удалось выйти: сначала сохрани данные в облако.');
+                return;
+            }
+        }
+        clearLocalCharactersAfterLogout();
         cloudUser = null;
         writeAccountProfile(null);
         updateAccountUI();
         showAccountMenuView();
+        document.body.classList.add('main-menu-open');
+        renderCharacterMenu();
+        if (appRouteReady) setRoute('menu', null, true);
     }
 
     function toggleAccountAutoSync(checked) {
@@ -5355,9 +5446,19 @@ ${getCleanFeatType(slot.type)}`;
         await saveAccountToCloud({ auto: true });
     }
 
-    function handleProfileAvatar(input) {
+    function openProfileAvatarPicker() {
+        cloudUser = cloudUser || readAccountProfile();
         if (!cloudUser) {
-            openAccountProfile();
+            updateAccountUI('Сначала войди в аккаунт.');
+            return;
+        }
+        document.getElementById('profileAvatarInput')?.click();
+    }
+
+    function handleProfileAvatar(input) {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser) {
+            updateAccountUI('Сначала войди в аккаунт.');
             return;
         }
         if (!input.files || !input.files[0]) return;
@@ -5518,7 +5619,7 @@ ${getCleanFeatType(slot.type)}`;
         if (cloudLoading) return false;
         cloudLoading = true;
         const snapshot = buildAccountSnapshot();
-        setCloudSyncStatus(options.auto ? 'Автосохранение в облако...' : 'Сохраняю всё в облако...');
+        setCloudSyncStatus(options.logout ? 'Сохраняю перед выходом...' : (options.auto ? 'Автосохранение в облако...' : 'Сохраняю всё в облако...'));
         const nicknameKey = accountStorageKey(cloudUser.nickname);
         const payload = {
             nickname_key: nicknameKey,
@@ -5809,30 +5910,106 @@ ${getCleanFeatType(slot.type)}`;
         safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
     }
 
+    function getCharacterUploadIconHtml() {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg>';
+    }
+
+    function handleCharacterToolbarUploadClick() {
+        if (characterPendingDeleteIds && characterPendingDeleteIds.size) {
+            confirmPendingCharacterDeletes();
+            return;
+        }
+        startImportCharacterAsNew();
+    }
+
+    function closeCharacterContextMenu() {
+        if (!characterMenuOpenId) return;
+        characterMenuOpenId = null;
+        renderCharacterMenu();
+    }
+
+    function toggleCharacterContextMenu(id, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (characterPendingDeleteIds.size || mobileReorderMode === 'characters') return;
+        characterMenuOpenId = String(characterMenuOpenId) === String(id) ? null : String(id);
+        renderCharacterMenu();
+    }
+
+    function queueCharacterDelete(id, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        characterMenuOpenId = null;
+        characterPendingDeleteIds.add(String(id));
+        characterDeleteSelectMode = true;
+        mobileReorderMode = null;
+        selectedMobileReorder = null;
+        renderCharacterMenu();
+    }
+
+    function togglePendingCharacterDelete(id, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const key = String(id);
+        if (characterPendingDeleteIds.has(key)) characterPendingDeleteIds.delete(key);
+        else characterPendingDeleteIds.add(key);
+        characterDeleteSelectMode = characterPendingDeleteIds.size > 0;
+        if (!characterDeleteSelectMode) characterMenuOpenId = null;
+        renderCharacterMenu();
+    }
+
+    async function confirmPendingCharacterDeletes() {
+        const ids = Array.from(characterPendingDeleteIds || []);
+        if (!ids.length) return;
+        ids.forEach(id => {
+            safeStorageRemove(characterSheetKey(id));
+            safeStorageRemove(characterAvatarKey(id));
+        });
+        characters = characters.filter(ch => !characterPendingDeleteIds.has(String(ch.id)));
+        if (activeCharacterId && characterPendingDeleteIds.has(String(activeCharacterId))) activeCharacterId = null;
+        characterPendingDeleteIds.clear();
+        characterDeleteSelectMode = false;
+        characterMenuOpenId = null;
+        mobileReorderMode = null;
+        selectedMobileReorder = null;
+        writeCharacters();
+        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+        renderCharacterMenu();
+        if (!characters.length || !activeCharacterId) setRoute('menu', null, true);
+    }
+
     function renderCharacterMenu() {
         const list = document.getElementById('character-list');
-        const delBtn = document.getElementById('character-delete-btn');
         const uploadBtn = document.getElementById('character-upload-btn');
         const countEl = document.getElementById('character-count');
         if (!list) return;
-        if (!characters.length && characterDeleteSelectMode) {
+        characterPendingDeleteIds = characterPendingDeleteIds instanceof Set ? characterPendingDeleteIds : new Set();
+        const existingIds = new Set(characters.map(ch => String(ch.id)));
+        characterPendingDeleteIds.forEach(id => { if (!existingIds.has(String(id))) characterPendingDeleteIds.delete(id); });
+        characterDeleteSelectMode = characterPendingDeleteIds.size > 0;
+        if (!characters.length) {
+            characterPendingDeleteIds.clear();
             characterDeleteSelectMode = false;
+            characterMenuOpenId = null;
             mobileReorderMode = null;
             selectedMobileReorder = null;
         }
+        if (characterMenuOpenId && !existingIds.has(String(characterMenuOpenId))) characterMenuOpenId = null;
         if (countEl) countEl.innerText = `${characters.length}/${MAX_CHARACTERS}`;
         if (uploadBtn) {
+            const pendingDelete = characterPendingDeleteIds.size > 0;
             const canAdd = characters.length < MAX_CHARACTERS;
-            uploadBtn.disabled = !canAdd;
-            uploadBtn.title = canAdd ? 'Загрузить персонажа' : 'Достигнут лимит персонажей';
-        }
-        if (delBtn) {
-            const hasCharacters = characters.length > 0;
-            if (!hasCharacters) characterDeleteSelectMode = false;
-            delBtn.disabled = !hasCharacters;
-            delBtn.classList.toggle('active', hasCharacters && characterDeleteSelectMode);
-            delBtn.innerText = '✕';
-            delBtn.title = hasCharacters ? (characterDeleteSelectMode ? 'Отменить удаление' : 'Удалить персонажа') : 'Нет персонажей для удаления';
+            uploadBtn.disabled = pendingDelete ? false : !canAdd;
+            uploadBtn.classList.toggle('delete-confirm', pendingDelete);
+            uploadBtn.title = pendingDelete ? 'Удалить выбранных' : (canAdd ? 'Загрузить JSON' : 'Достигнут лимит персонажей');
+            uploadBtn.setAttribute('aria-label', uploadBtn.title);
+            uploadBtn.innerHTML = pendingDelete ? '✕' : getCharacterUploadIconHtml();
         }
         const reorderActive = mobileReorderMode === 'characters';
         const addCardHtml = (!characterDeleteSelectMode && !reorderActive && characters.length < MAX_CHARACTERS)
@@ -5844,19 +6021,23 @@ ${getCleanFeatType(slot.type)}`;
             return;
         }
         list.innerHTML = characters.map((ch, idx) => {
-            const avatarData = localStorage.getItem(characterAvatarKey(ch.id)) || ch.avatar || '';
+            const id = String(ch.id);
+            const avatarData = localStorage.getItem(characterAvatarKey(id)) || ch.avatar || '';
             const avatar = avatarData ? `<img src="${avatarData}" alt="">` : '👤';
             const picked = reorderActive && selectedMobileReorder && selectedMobileReorder.type === 'characters' && selectedMobileReorder.idx === idx;
-            const cls = `${characterDeleteSelectMode ? 'delete-select' : ''} ${picked ? 'reorder-picked' : ''}`.trim();
-            const click = characterDeleteSelectMode ? `deleteCharacter('${ch.id}')` : (reorderActive ? `handleReorderTap(event, 'characters', ${idx})` : `selectCharacter('${ch.id}')`);
-            const sheet = readCharacterSheet(ch.id);
+            const pendingDelete = characterPendingDeleteIds.has(id);
+            const cls = `${pendingDelete ? 'delete-select' : ''} ${picked ? 'reorder-picked' : ''}`.trim();
+            const click = characterDeleteSelectMode ? `togglePendingCharacterDelete('${id}', event)` : (reorderActive ? `handleReorderTap(event, 'characters', ${idx})` : `selectCharacter('${id}')`);
+            const sheet = readCharacterSheet(id);
             const meta = sheet ? getCharacterMetaFromSheet(sheet) : { name: ch.name || 'Герой', meta: ch.meta || 'Народ — Класс 1' };
             const hp = sheet ? getCharacterHPFromSheet(sheet) : { cur: 0, max: 0 };
             const hpClass = getCharacterHPColorClass(hp);
             const draggable = (!characterDeleteSelectMode && !reorderActive && window.innerWidth >= 1000) ? 'true' : 'false';
             const dragHandleClick = window.innerWidth < 1000 ? `handleCharacterDragHandleClick(event, ${idx})` : `event.stopPropagation()`;
             const dragHandleTitle = window.innerWidth < 1000 ? 'Нажми для перемещения' : 'Зажми и перетащи';
-            return `<div class="character-card ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div><div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div><div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions"><button type="button" class="character-json-btn" onclick="exportCharacterJSON('${ch.id}', event)" title="Сохранить JSON"><span class="character-btn-icon">💾</span></button><button type="button" class="character-clone-btn" onclick="cloneCharacter('${ch.id}', event)" title="Копировать персонажа"><span class="character-btn-icon">⎘</span></button></div></div>`;
+            const menuOpen = String(characterMenuOpenId || '') === id;
+            const menuHtml = menuOpen ? `<div class="character-context-menu" onclick="event.stopPropagation()"><button type="button" onclick="exportCharacterJSON('${id}', event)">Скачать</button><button type="button" onclick="cloneCharacter('${id}', event)">Клонировать</button><button type="button" class="danger" onclick="queueCharacterDelete('${id}', event)">Удалить</button></div>` : '';
+            return `<div class="character-card ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div><div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div><div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions"><button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
         }).join('') + addCardHtml;
         syncMobileReorderButtons();
     }
@@ -5905,7 +6086,8 @@ ${getCleanFeatType(slot.type)}`;
             saveAll(false);
             await flushCloudSave();
         }
-        characterDeleteSelectMode = false;
+        characterDeleteSelectMode = characterPendingDeleteIds.size > 0;
+        characterMenuOpenId = null;
         document.body.classList.add('main-menu-open');
         renderCharacterMenu();
         if (!fromRoute) setRoute('menu', null, replaceRoute);
@@ -5913,18 +6095,11 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function toggleCharacterDeleteMode() {
-        if (!characters.length) {
-            characterDeleteSelectMode = false;
-            mobileReorderMode = null;
-            selectedMobileReorder = null;
-            renderCharacterMenu();
-            return;
-        }
-        characterDeleteSelectMode = !characterDeleteSelectMode;
-        if (characterDeleteSelectMode) {
-            mobileReorderMode = null;
-            selectedMobileReorder = null;
-        }
+        characterPendingDeleteIds.clear();
+        characterDeleteSelectMode = false;
+        characterMenuOpenId = null;
+        mobileReorderMode = null;
+        selectedMobileReorder = null;
         renderCharacterMenu();
     }
 
@@ -5972,20 +6147,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     async function deleteCharacter(id) {
-        if (!characterDeleteSelectMode) return;
-        safeStorageRemove(characterSheetKey(id));
-        safeStorageRemove(characterAvatarKey(id));
-        characters = characters.filter(ch => String(ch.id) !== String(id));
-        if (!characters.length) {
-            characterDeleteSelectMode = false;
-            mobileReorderMode = null;
-            selectedMobileReorder = null;
-        }
-        if (String(activeCharacterId) === String(id)) activeCharacterId = null;
-        writeCharacters();
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
-        renderCharacterMenu();
-        if (!characters.length || !activeCharacterId) setRoute('menu', null, true);
+        queueCharacterDelete(id);
     }
 
     async function selectCharacter(id, options = {}) {
@@ -6127,6 +6289,8 @@ ${getCleanFeatType(slot.type)}`;
             return;
         }
         characterDeleteSelectMode = false;
+        characterPendingDeleteIds.clear();
+        characterMenuOpenId = null;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         renderCharacterMenu();
@@ -6260,6 +6424,7 @@ ${getCleanFeatType(slot.type)}`;
         loginExistingNicknameAccount,
         logoutNicknameAccount,
         toggleAccountAutoSync,
+        openProfileAvatarPicker,
         handleProfileAvatar,
         saveAccountToCloud,
         requestLoadAccountFromCloud,

@@ -36,24 +36,23 @@
                 <button type="button" class="site-icon-mark" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
                 <div class="account-header-info">
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
-                    <div id="account-header-meta" class="account-header-meta">Нажми на аватарку, чтобы войти</div>
+                    <div id="account-header-meta" class="account-header-meta"></div>
                 </div>
             </div>
             <h1 class="character-menu-title">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
-                <button type="button" id="cloud-save-btn" class="cloud-action-btn" onclick="saveAccountToCloud()" title="Сохранить в облако" aria-label="Сохранить в облако">☁↑</button>
-                <button type="button" id="cloud-download-btn" class="cloud-action-btn" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака" aria-label="Загрузить из облака">☁↓</button>
+                <button type="button" id="cloud-save-btn" class="cloud-action-btn cloud-action-save" onclick="saveAccountToCloud()" title="Сохранить в облако" aria-label="Сохранить в облако"><span class="cloud-icon">☁</span><span class="cloud-arrow">↑</span></button>
+                <button type="button" id="cloud-download-btn" class="cloud-action-btn cloud-action-load" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака" aria-label="Загрузить из облака"><span class="cloud-icon">☁</span><span class="cloud-arrow">↓</span></button>
             </div>
         </div>
         <div class="character-menu-toolbar">
             <div id="character-count" class="character-count">0/10</div>
             <div class="character-toolbar-actions">
-                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="startImportCharacterAsNew()" title="Загрузить персонажа" aria-label="Загрузить персонажа"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button>
-                <button type="button" id="character-delete-btn" class="btn-sec character-menu-icon-btn" onclick="toggleCharacterDeleteMode()" title="Удалить персонажа">✕</button>
+                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick()" title="Загрузить персонажа" aria-label="Загрузить персонажа"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button>
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.01<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.01b<br>by RubiDus</div>
     </div>
 </div>
 
@@ -61,28 +60,25 @@
     <h3>Аккаунт</h3>
 
     <div id="account-menu-view" class="account-view active">
-        <div class="account-avatar-preview"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></div>
+        <button type="button" class="account-avatar-preview" onclick="openProfileAvatarPicker()" title="Сменить аватарку" aria-label="Сменить аватарку"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></button>
         <div id="account-nickname-label" class="account-nickname-label">Локальный профиль</div>
         <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
 
         <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
             <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
-            <span><b>Автосинхронизация</b><small>Сохранять облако при выходе в главное меню</small></span>
+            <span><b>Автосинхронизация</b></span>
         </label>
 
         <div id="account-menu-actions" class="account-menu-actions">
             <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
             <button type="button" onclick="openAccountLoginForm()" class="btn-sec">ВОЙТИ В АККАУНТ</button>
         </div>
-
-        <button type="button" id="account-avatar-change-btn" onclick="document.getElementById('profileAvatarInput').click()" class="btn-sec">СМЕНИТЬ АВАТАРКУ</button>
         <button type="button" id="account-logout-btn" onclick="logoutNicknameAccount()" class="btn-sec danger">ВЫЙТИ</button>
     </div>
 
     <div id="account-create-view" class="account-view">
         <label class="l">Имя нового аккаунта</label>
         <input type="text" id="account-create-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
-        <div class="account-modal-info">Создание сработает только если такого имени ещё нет. Регистр букв не важен.</div>
         <button type="button" onclick="createNicknameAccount()" class="btn-primary">СОЗДАТЬ</button>
         <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
     </div>
@@ -90,7 +86,6 @@
     <div id="account-login-view" class="account-view">
         <label class="l">Имя существующего аккаунта</label>
         <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
-        <div class="account-modal-info">Вход работает только если аккаунт уже есть в облаке. Большие и маленькие буквы считаются одинаковыми.</div>
         <button type="button" onclick="loginExistingNicknameAccount()" class="btn-primary">ВОЙТИ</button>
         <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
     </div>
@@ -1001,7 +996,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.01"></script>
+<script src="js/app.js?v=1.01b"></script>
 
 <div class="footer-spacer"></div>
 </body>

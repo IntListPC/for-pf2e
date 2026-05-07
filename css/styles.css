@@ -913,7 +913,7 @@
         .account-modal h3 { margin-bottom: 14px; }
         .account-view { display: none; }
         .account-view.active { display: block; }
-        .account-avatar-preview { width: 112px; height: 112px; margin: 0 auto 12px; border-radius: 24px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .account-avatar-preview { width: 112px; height: 112px; margin: 0 auto 12px; padding: 0; border-radius: 24px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .account-avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .account-nickname-label { margin-bottom: 8px; font-size: 20px; font-weight: 950; }
         .account-modal-info { margin: 0 0 14px; color: var(--text-dim); font-size: 12px; line-height: 1.35; font-weight: 800; }
@@ -981,3 +981,34 @@
         .attack-notes-preview.empty { color: var(--text-dim); font-style: italic; }
         #atk-type { color: var(--text) !important; border-color: var(--border) !important; }
         #atk-type option { color: white; background: var(--input-bg); }
+
+        /* 1.01b: account status, cloud arrows, character card menu */
+        .account-header-meta { min-height: 12px; opacity: 1; transition: opacity 0.7s ease, color 0.2s ease; }
+        .account-header-meta.loading { display: inline-flex !important; align-items: center; gap: 6px; color: #dbeafe; }
+        .account-header-meta.loading::before { content: ''; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; border: 2px solid rgba(219, 234, 254, 0.30); border-top-color: #dbeafe; animation: account-spin 0.8s linear infinite; }
+        .account-header-meta.error { display: block !important; color: #fecaca; }
+        .account-header-meta.fading { opacity: 0; }
+        @keyframes account-spin { to { transform: rotate(360deg); } }
+
+        .cloud-action-btn { gap: 1px; overflow: hidden; position: relative; }
+        .cloud-action-btn .cloud-icon { font-size: 17px; line-height: 1; }
+        .cloud-action-btn .cloud-arrow { display: inline-block; font-size: 17px; line-height: 1; animation: cloud-arrow-up 1.05s ease-in-out infinite; }
+        .cloud-action-load .cloud-arrow { animation-name: cloud-arrow-down; }
+        @keyframes cloud-arrow-up { 0%, 100% { transform: translateY(3px); opacity: 0.62; } 45% { transform: translateY(-4px); opacity: 1; } }
+        @keyframes cloud-arrow-down { 0%, 100% { transform: translateY(-3px); opacity: 0.62; } 45% { transform: translateY(4px); opacity: 1; } }
+
+        #character-upload-btn.delete-confirm { color: #fecaca !important; border-color: rgba(239, 68, 68, 0.72) !important; background: rgba(239, 68, 68, 0.18) !important; font-size: 23px; font-weight: 1000; }
+        .character-card { position: relative; }
+        .character-card.delete-select { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.86); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.14), 0 8px 18px rgba(239, 68, 68, 0.10); }
+        .character-card.delete-select * { pointer-events: none; }
+        .character-menu-btn { width: 46px; height: 46px; border-radius: 15px; border: 1px solid rgba(148, 163, 184, 0.34); background: rgba(255,255,255,0.06); color: #e2e8f0; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 18px; font-weight: 1000; letter-spacing: 0.05em; line-height: 1; }
+        .character-context-menu { position: absolute; right: 16px; top: 66px; z-index: 20; min-width: 156px; padding: 7px; border-radius: 15px; border: 1px solid rgba(148, 163, 184, 0.30); background: rgba(15, 23, 42, 0.98); box-shadow: 0 16px 34px rgba(0,0,0,0.42); display: flex; flex-direction: column; gap: 5px; }
+        .character-context-menu button { width: 100%; border: 0; border-radius: 11px; background: rgba(255,255,255,0.06); color: var(--text); padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 900; }
+        .character-context-menu button.danger { color: #fecaca; background: rgba(239, 68, 68, 0.13); }
+        .character-add-card { min-height: 126px; }
+        .character-add-avatar { line-height: 1; padding-bottom: 6px; font-size: 50px; }
+        @media (max-width: 520px) {
+            .character-context-menu { right: 12px; top: 60px; min-width: 146px; }
+            .character-menu-btn { width: 42px; height: 42px; border-radius: 14px; }
+            .character-add-avatar { font-size: 45px; padding-bottom: 5px; }
+        }

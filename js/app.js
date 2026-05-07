@@ -6,6 +6,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const SUPABASE_URL = 'https://jgrhmzbzojxsybghirrt.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_cE3BBpoZlXM-cYx2DC9gnQ_h4fZqiI5';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
+    const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
     const ROUTE_MENU_HASH = '#characters';
     const ROUTE_CHARACTER_PREFIX = '#character=';
@@ -5243,6 +5244,31 @@ ${getCleanFeatType(slot.type)}`;
         setCloudSyncStatus(message);
     }
 
+    function formatCloudError(error, fallback = 'ошибка Supabase') {
+        if (!error) return fallback;
+        return error.message || error.error_description || error.details || fallback;
+    }
+
+    function getCloudTimeoutMessage(action) {
+        return `${action}: Supabase не ответил за ${Math.round(CLOUD_REQUEST_TIMEOUT_MS / 1000)} секунд. Проверьте интернет, VPN, DNS или блокировщик на этом устройстве.`;
+    }
+
+    async function withCloudTimeout(request, action) {
+        let timerId = null;
+        const timeoutResult = new Promise(resolve => {
+            timerId = setTimeout(() => {
+                resolve({ data: null, error: { message: getCloudTimeoutMessage(action) }, timedOut: true });
+            }, CLOUD_REQUEST_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([Promise.resolve(request), timeoutResult]);
+        } catch (error) {
+            return { data: null, error };
+        } finally {
+            if (timerId) clearTimeout(timerId);
+        }
+    }
+
     async function initSupabase() {
         cloudUser = readAccountProfile();
         updateAccountUI();
@@ -5260,11 +5286,11 @@ ${getCleanFeatType(slot.type)}`;
     async function fetchAccountBackupRow() {
         if (!supabaseClient || !cloudUser) return { data: null, error: null };
         const nicknameKey = accountStorageKey(cloudUser.nickname);
-        return supabaseClient
+        return withCloudTimeout(supabaseClient
             .from('account_backups')
             .select('data,profile_avatar,updated_at')
             .eq('nickname_key', nicknameKey)
-            .maybeSingle();
+            .maybeSingle(), 'Загрузка профиля');
     }
 
     async function syncAccountProfileFromCloud(showMessage = true) {
@@ -5273,7 +5299,7 @@ ${getCleanFeatType(slot.type)}`;
         const { data: row, error } = await fetchAccountBackupRow();
         if (error) {
             console.warn('Cloud profile load error', error);
-            updateCloudAuthUI(`Не удалось загрузить профиль: ${error.message || 'ошибка Supabase'}`);
+            updateCloudAuthUI(`Не удалось загрузить профиль: ${formatCloudError(error)}`);
             return;
         }
         const avatar = row?.profile_avatar || row?.data?.profileAvatar || '';
@@ -5328,13 +5354,13 @@ ${getCleanFeatType(slot.type)}`;
             data: snapshot,
             updated_at: new Date().toISOString()
         };
-        const { data: savedRows, error } = await supabaseClient
+        const { data: savedRows, error } = await withCloudTimeout(supabaseClient
             .from('account_backups')
             .upsert(payload, { onConflict: 'nickname_key' })
-            .select('nickname_key,updated_at');
+            .select('nickname_key,updated_at'), 'Сохранение в облако');
         if (error) {
             console.warn('Cloud account save error', error);
-            updateCloudAuthUI(`Не удалось сохранить: ${error.message || 'ошибка Supabase'}`);
+            updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
             return;
         }
         const savedRow = savedRows?.[0];
@@ -5355,7 +5381,7 @@ ${getCleanFeatType(slot.type)}`;
         const { data: row, error } = await fetchAccountBackupRow();
         if (error) {
             console.warn('Cloud account load error', error);
-            updateCloudAuthUI(`Не удалось загрузить данные облака: ${error.message || 'ошибка Supabase'}`);
+            updateCloudAuthUI(`Не удалось загрузить данные облака: ${formatCloudError(error)}`);
             return;
         }
         const snapshot = row?.data || null;

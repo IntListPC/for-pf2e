@@ -5297,15 +5297,21 @@ ${getCleanFeatType(slot.type)}`;
             data: snapshot,
             updated_at: new Date().toISOString()
         };
-        const { error } = await supabaseClient
+        const { data: savedRows, error } = await supabaseClient
             .from('account_backups')
-            .upsert(payload, { onConflict: 'nickname_key' });
+            .upsert(payload, { onConflict: 'nickname_key' })
+            .select('nickname_key,updated_at');
         if (error) {
             console.warn('Cloud account save error', error);
             updateCloudAuthUI(`Не удалось сохранить: ${error.message || 'ошибка Supabase'}`);
             return;
         }
-        updateCloudAuthUI('Сохранено в облако');
+        const savedRow = savedRows?.[0];
+        if (!savedRow) {
+            updateCloudAuthUI('Запрос прошёл, но Supabase не вернул строку');
+            return;
+        }
+        updateCloudAuthUI(`Сохранено в облако: ${savedRow.nickname_key}`);
     }
 
     async function requestLoadAccountFromCloud() {

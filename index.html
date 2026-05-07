@@ -32,19 +32,17 @@
 <div id="characterMenu" class="character-menu">
     <div class="character-menu-inner">
         <div class="character-menu-header">
+            <div class="account-header-card" onclick="openAccountProfile()">
+                <button type="button" class="site-icon-mark" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
+                <div class="account-header-info">
+                    <div id="account-header-name" class="account-header-name">Локальный профиль</div>
+                    <div id="account-header-meta" class="account-header-meta">Нажми на аватарку, чтобы войти</div>
+                </div>
+            </div>
             <h1 class="character-menu-title">Персонажи</h1>
-            <button type="button" class="site-icon-mark" onclick="openAccountProfile()" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
-                <button type="button" id="cloud-save-btn" class="cloud-action-btn" onclick="saveAccountToCloud()" title="Сохранить в облако">S</button>
-                <button type="button" id="cloud-download-btn" class="cloud-action-btn" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака">D</button>
-            </div>
-        </div>
-        <div id="cloud-auth-bar" class="cloud-auth-bar">
-            <div class="cloud-auth-text">
-                <div id="cloud-auth-status" class="cloud-auth-status">Локальное сохранение</div>
-                <div id="cloud-sync-status" class="cloud-sync-status">Yandex Cloud подключается после входа</div>
-            </div>
-            <div class="cloud-auth-actions">
+                <button type="button" id="cloud-save-btn" class="cloud-action-btn" onclick="saveAccountToCloud()" title="Сохранить в облако" aria-label="Сохранить в облако">☁↑</button>
+                <button type="button" id="cloud-download-btn" class="cloud-action-btn" onclick="requestLoadAccountFromCloud()" title="Загрузить из облака" aria-label="Загрузить из облака">☁↓</button>
             </div>
         </div>
         <div class="character-menu-toolbar">
@@ -55,23 +53,48 @@
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.0a-6<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.0a-7<br>by RubiDus</div>
     </div>
 </div>
 
 <div id="accountModal" class="modal"><div class="modal-content account-modal">
-    <h3>Профиль</h3>
-    <div id="account-login-view">
-        <label class="l">Ник</label>
-        <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите ник">
-        <button type="button" onclick="loginNicknameAccount()" class="btn-primary">ВОЙТИ</button>
-    </div>
-    <div id="account-profile-view">
+    <h3>Аккаунт</h3>
+
+    <div id="account-menu-view" class="account-view active">
         <div class="account-avatar-preview"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></div>
-        <div id="account-nickname-label" class="account-nickname-label"></div>
-        <button type="button" onclick="document.getElementById('profileAvatarInput').click()" class="btn-primary">СМЕНИТЬ АВАТАРКУ</button>
-        <button type="button" onclick="logoutNicknameAccount()" class="btn-sec">ВЫЙТИ</button>
+        <div id="account-nickname-label" class="account-nickname-label">Локальный профиль</div>
+        <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
+
+        <label class="account-sync-toggle" for="account-auto-sync-toggle">
+            <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
+            <span><b>Автосинхронизация</b><small>Сохранять облако при выходе в главное меню</small></span>
+        </label>
+
+        <div class="account-menu-actions">
+            <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
+            <button type="button" onclick="openAccountLoginForm()" class="btn-sec">ВОЙТИ В АККАУНТ</button>
+        </div>
+
+        <button type="button" id="account-avatar-change-btn" onclick="document.getElementById('profileAvatarInput').click()" class="btn-sec">СМЕНИТЬ АВАТАРКУ</button>
+        <button type="button" id="account-logout-btn" onclick="logoutNicknameAccount()" class="btn-sec danger">ВЫЙТИ</button>
     </div>
+
+    <div id="account-create-view" class="account-view">
+        <label class="l">Имя нового аккаунта</label>
+        <input type="text" id="account-create-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
+        <div class="account-modal-info">Создание сработает только если такого имени ещё нет. Регистр букв не важен.</div>
+        <button type="button" onclick="createNicknameAccount()" class="btn-primary">СОЗДАТЬ</button>
+        <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
+    </div>
+
+    <div id="account-login-view" class="account-view">
+        <label class="l">Имя существующего аккаунта</label>
+        <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
+        <div class="account-modal-info">Вход работает только если аккаунт уже есть в облаке. Большие и маленькие буквы считаются одинаковыми.</div>
+        <button type="button" onclick="loginExistingNicknameAccount()" class="btn-primary">ВОЙТИ</button>
+        <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
+    </div>
+
     <button type="button" onclick="closeModal('accountModal')" class="btn-sec">ЗАКРЫТЬ</button>
 </div></div>
 
@@ -978,7 +1001,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.0a-6"></script>
+<script src="js/app.js?v=1.0a-7"></script>
 
 <div class="footer-spacer"></div>
 </body>

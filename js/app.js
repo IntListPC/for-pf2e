@@ -5132,7 +5132,8 @@ ${getCleanFeatType(slot.type)}`;
             return {
                 id: profile.id || hashAccountToUuid(nickname),
                 nickname,
-                avatar: profile.avatar || ''
+                avatar: profile.avatar || '',
+                autoSync: !!profile.autoSync
             };
         } catch (e) {
             console.warn('Account profile read error', e);
@@ -5145,11 +5146,58 @@ ${getCleanFeatType(slot.type)}`;
             safeStorageRemove(ACCOUNT_PROFILE_KEY);
             return;
         }
-        safeStorageSet(ACCOUNT_PROFILE_KEY, JSON.stringify(profile), false);
+        safeStorageSet(ACCOUNT_PROFILE_KEY, JSON.stringify({
+            id: profile.id || hashAccountToUuid(profile.nickname),
+            nickname: normalizeAccountNickname(profile.nickname),
+            avatar: profile.avatar || '',
+            autoSync: !!profile.autoSync
+        }), false);
     }
 
     function getDefaultProfileIcon() {
         return 'assets/icons/favicon.png';
+    }
+
+    function getAccountDefaultInfo(profile = cloudUser || readAccountProfile()) {
+        if (!profile) return 'Локальное сохранение · облако выключено';
+        return `Yandex Cloud · автосинхронизация ${profile.autoSync ? 'включена' : 'выключена'}`;
+    }
+
+    function updateAccountSummary(message = '') {
+        const profile = cloudUser || readAccountProfile();
+        const headerName = document.getElementById('account-header-name');
+        const headerMeta = document.getElementById('account-header-meta');
+        const modalInfo = document.getElementById('account-modal-info');
+        const authStatus = document.getElementById('cloud-auth-status');
+        const syncStatus = document.getElementById('cloud-sync-status');
+        const text = message || getAccountDefaultInfo(profile);
+        if (headerName) headerName.innerText = profile?.nickname || 'Локальный профиль';
+        if (headerMeta) headerMeta.innerText = text;
+        if (modalInfo) modalInfo.innerText = text;
+        if (authStatus) authStatus.innerText = profile ? `Аккаунт: ${profile.nickname}` : 'Локальный профиль';
+        if (syncStatus) syncStatus.innerText = text;
+    }
+
+    function setAccountView(view = 'menu') {
+        ['menu', 'create', 'login'].forEach(name => {
+            const el = document.getElementById(`account-${name}-view`);
+            if (el) el.classList.toggle('active', name === view);
+        });
+        const targetId = view === 'create' ? 'account-create-nickname-input' : (view === 'login' ? 'account-nickname-input' : '');
+        if (targetId) setTimeout(() => document.getElementById(targetId)?.focus(), 50);
+    }
+
+    function showAccountMenuView() {
+        updateAccountUI();
+        setAccountView('menu');
+    }
+
+    function openAccountCreateForm() {
+        setAccountView('create');
+    }
+
+    function openAccountLoginForm() {
+        setAccountView('login');
     }
 
     function updateAccountUI(message = '') {
@@ -5158,49 +5206,136 @@ ${getCleanFeatType(slot.type)}`;
         const icon = document.getElementById('profile-icon-img');
         const avatarPreview = document.getElementById('account-avatar-img');
         const nicknameLabel = document.getElementById('account-nickname-label');
-        const loginView = document.getElementById('account-login-view');
-        const profileView = document.getElementById('account-profile-view');
         const actions = document.getElementById('cloud-action-buttons');
+        const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
+        const avatarChangeBtn = document.getElementById('account-avatar-change-btn');
+        const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
         if (avatarPreview) avatarPreview.src = avatar;
-        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || '';
-        if (loginView) loginView.classList.toggle('active', !profile);
-        if (profileView) profileView.classList.toggle('active', !!profile);
+        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || 'Локальный профиль';
         if (actions) actions.classList.toggle('active', !!profile);
-        updateCloudAuthUI(message);
+        if (autoSyncToggle) {
+            autoSyncToggle.checked = !!profile?.autoSync;
+            autoSyncToggle.disabled = !profile;
+        }
+        if (avatarChangeBtn) avatarChangeBtn.style.display = profile ? '' : 'none';
+        if (logoutBtn) logoutBtn.style.display = profile ? '' : 'none';
+        updateAccountSummary(message);
     }
 
     function openAccountProfile() {
         cloudUser = readAccountProfile();
         updateAccountUI();
+        setAccountView('menu');
         openModal('accountModal');
-        if (!cloudUser) {
-            const input = document.getElementById('account-nickname-input');
-            if (input) setTimeout(() => input.focus(), 50);
-        }
     }
 
-    async function loginNicknameAccount() {
+    async function checkCloudAccountExists(nickname, action = 'Проверка аккаунта') {
+        const nicknameKey = accountStorageKey(nickname);
+        const { data: row, error } = await cloudApiRequest('GET', nicknameKey, null, action);
+        if (error) return { exists: false, row: null, error };
+        return { exists: !!row, row: row || null, error: null };
+    }
+
+    async function createNicknameAccount() {
+        const input = document.getElementById('account-create-nickname-input');
+        const nickname = normalizeAccountNickname(input?.value || '');
+        if (!nickname) {
+            alert('Введите имя аккаунта.');
+            return;
+        }
+        setCloudSyncStatus('Проверяю имя аккаунта...');
+        const checked = await checkCloudAccountExists(nickname, 'Создание аккаунта');
+        if (checked.error) {
+            console.warn('Cloud account create check error', checked.error);
+            updateCloudAuthUI(`Не удалось проверить аккаунт: ${formatCloudError(checked.error)}`);
+            return;
+        }
+        if (checked.exists) {
+            updateCloudAuthUI('Такой аккаунт уже существует. Используй вход.');
+            return;
+        }
+        const previous = readAccountProfile();
+        cloudUser = {
+            id: hashAccountToUuid(nickname),
+            nickname,
+            avatar: previous?.avatar || '',
+            autoSync: false
+        };
+        writeAccountProfile(cloudUser);
+        if (input) input.value = '';
+        showAccountMenuView();
+        const saved = await saveAccountToCloud({ accountCreated: true });
+        if (saved) updateAccountUI('Аккаунт создан. Автосинхронизация выключена.');
+    }
+
+    async function loginExistingNicknameAccount() {
         const input = document.getElementById('account-nickname-input');
         const nickname = normalizeAccountNickname(input?.value || '');
         if (!nickname) {
-            alert('Введите ник.');
+            alert('Введите имя аккаунта.');
             return;
         }
-        cloudUser = { id: hashAccountToUuid(nickname), nickname, avatar: readAccountProfile()?.avatar || '' };
+        setCloudSyncStatus('Ищу аккаунт в облаке...');
+        const checked = await checkCloudAccountExists(nickname, 'Вход в аккаунт');
+        if (checked.error) {
+            console.warn('Cloud account login error', checked.error);
+            updateCloudAuthUI(`Не удалось войти: ${formatCloudError(checked.error)}`);
+            return;
+        }
+        if (!checked.exists) {
+            updateCloudAuthUI('Аккаунт не найден. Сначала создай аккаунт.');
+            return;
+        }
+        const oldProfile = readAccountProfile();
+        const row = checked.row || {};
+        const displayName = normalizeAccountNickname(row.nickname || nickname);
+        const avatar = row.profile_avatar || row.data?.profileAvatar || oldProfile?.avatar || '';
+        const sameAccount = accountStorageKey(oldProfile?.nickname || '') === accountStorageKey(displayName);
+        cloudUser = {
+            id: hashAccountToUuid(displayName),
+            nickname: displayName,
+            avatar,
+            autoSync: sameAccount ? !!oldProfile?.autoSync : false
+        };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
-        updateAccountUI('Аккаунт открыт');
+        showAccountMenuView();
         closeModal('accountModal');
-        await syncAccountProfileFromCloud();
+        updateAccountUI('Аккаунт открыт. Загрузка данных — вручную через ☁↓.');
+    }
+
+    async function loginNicknameAccount() {
+        return loginExistingNicknameAccount();
     }
 
     function logoutNicknameAccount() {
         cloudUser = null;
         writeAccountProfile(null);
         updateAccountUI('Аккаунт закрыт');
-        closeModal('accountModal');
+        showAccountMenuView();
+    }
+
+    function toggleAccountAutoSync(checked) {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser) {
+            updateAccountUI('Сначала войди в аккаунт');
+            return;
+        }
+        cloudUser.autoSync = !!checked;
+        writeAccountProfile(cloudUser);
+        updateAccountUI(cloudUser.autoSync ? 'Автосинхронизация включена' : 'Автосинхронизация выключена');
+    }
+
+    function isAccountAutoSyncEnabled() {
+        cloudUser = cloudUser || readAccountProfile();
+        return !!cloudUser?.autoSync;
+    }
+
+    async function maybeAutoSaveAccountOnMenu() {
+        if (!isAccountAutoSyncEnabled() || cloudLoading) return;
+        await saveAccountToCloud({ auto: true });
     }
 
     function handleProfileAvatar(input) {
@@ -5230,16 +5365,15 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function setCloudSyncStatus(message) {
+        updateAccountSummary(message || '');
         const syncStatus = document.getElementById('cloud-sync-status');
         const bar = document.getElementById('cloud-auth-bar');
         if (syncStatus) syncStatus.innerText = message || '';
-        if (bar) bar.classList.toggle('open', !!message);
+        if (bar) bar.classList.toggle('open', false);
     }
 
     function updateCloudAuthUI(message = '') {
-        const authStatus = document.getElementById('cloud-auth-status');
-        if (authStatus) authStatus.innerText = cloudUser ? `Аккаунт: ${cloudUser.nickname}` : 'Войдите по нику через иконку профиля';
-        setCloudSyncStatus(message);
+        updateAccountSummary(message || '');
     }
 
     function formatCloudError(error, fallback = 'ошибка облака') {
@@ -5304,15 +5438,9 @@ ${getCleanFeatType(slot.type)}`;
         }
     }
 
-    async function initSupabase() {
+    async function initCloud() {
         cloudUser = readAccountProfile();
-        updateAccountUI();
-        updateCloudAuthUI(cloudUser ? 'Yandex Cloud подключается...' : 'Войдите по нику через иконку профиля');
-        if (cloudUser) {
-            syncAccountProfileFromCloud(false).catch(error => {
-                console.warn('Cloud profile background sync error', error);
-            });
-        }
+        updateAccountUI(cloudUser ? '' : 'Локальное сохранение · создай аккаунт или войди');
     }
 
     async function fetchAccountBackupRow() {
@@ -5336,9 +5464,9 @@ ${getCleanFeatType(slot.type)}`;
             writeAccountProfile(cloudUser);
             updateAccountUI(showMessage ? 'Профиль загружен из облака' : '');
         } else if (showMessage) {
-            updateAccountUI('Аккаунт открыт');
+            updateAccountUI('Профиль открыт');
         } else {
-            updateCloudAuthUI('Yandex Cloud готов');
+            updateAccountUI();
         }
     }
 
@@ -5368,10 +5496,12 @@ ${getCleanFeatType(slot.type)}`;
         };
     }
 
-    async function saveAccountToCloud() {
-        if (!requireNicknameAccount()) return;
+    async function saveAccountToCloud(options = {}) {
+        if (!requireNicknameAccount()) return false;
+        if (cloudLoading) return false;
+        cloudLoading = true;
         const snapshot = buildAccountSnapshot();
-        setCloudSyncStatus('Сохраняю всё в облако...');
+        setCloudSyncStatus(options.auto ? 'Автосохранение в облако...' : 'Сохраняю всё в облако...');
         const nicknameKey = accountStorageKey(cloudUser.nickname);
         const payload = {
             nickname_key: nicknameKey,
@@ -5380,17 +5510,22 @@ ${getCleanFeatType(slot.type)}`;
             data: snapshot,
             updated_at: new Date().toISOString()
         };
-        const { data: savedRow, error } = await cloudApiRequest('POST', nicknameKey, payload, 'Сохранение в облако');
-        if (error) {
-            console.warn('Cloud account save error', error);
-            updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
-            return;
+        try {
+            const { data: savedRow, error } = await cloudApiRequest('POST', nicknameKey, payload, 'Сохранение в облако');
+            if (error) {
+                console.warn('Cloud account save error', error);
+                updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
+                return false;
+            }
+            if (!savedRow?.ok) {
+                updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
+                return false;
+            }
+            updateCloudAuthUI(options.auto ? 'Автосохранение выполнено' : (options.accountCreated ? 'Аккаунт создан и сохранён' : `Сохранено в облако: ${savedRow.nickname_key || nicknameKey}`));
+            return true;
+        } finally {
+            cloudLoading = false;
         }
-        if (!savedRow?.ok) {
-            updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
-            return;
-        }
-        updateCloudAuthUI(`Сохранено в облако: ${savedRow.nickname_key || nicknameKey}`);
     }
 
     async function requestLoadAccountFromCloud() {
@@ -5404,7 +5539,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         const snapshot = row?.data || null;
         if (!snapshot || !Array.isArray(snapshot.characters)) {
-            updateCloudAuthUI('В облаке нет данных для этого ника');
+            updateCloudAuthUI('В облаке нет данных для этого аккаунта');
             return;
         }
         pendingCloudDownloadSnapshot = snapshot;
@@ -5748,6 +5883,7 @@ ${getCleanFeatType(slot.type)}`;
 
     async function openCharacterMenu(options = {}) {
         const { fromRoute = false, replaceRoute = false } = options || {};
+        const shouldAutoSaveOnMenu = !!activeCharacterId && !document.body.classList.contains('main-menu-open');
         if (activeCharacterId) {
             saveAll(false);
             await flushCloudSave();
@@ -5756,6 +5892,7 @@ ${getCleanFeatType(slot.type)}`;
         document.body.classList.add('main-menu-open');
         renderCharacterMenu();
         if (!fromRoute) setRoute('menu', null, replaceRoute);
+        if (shouldAutoSaveOnMenu) maybeAutoSaveAccountOnMenu();
     }
 
     function toggleCharacterDeleteMode() {
@@ -6098,8 +6235,14 @@ ${getCleanFeatType(slot.type)}`;
 
     Object.assign(window, {
         openAccountProfile,
+        showAccountMenuView,
+        openAccountCreateForm,
+        openAccountLoginForm,
+        createNicknameAccount,
         loginNicknameAccount,
+        loginExistingNicknameAccount,
         logoutNicknameAccount,
+        toggleAccountAutoSync,
         handleProfileAvatar,
         saveAccountToCloud,
         requestLoadAccountFromCloud,
@@ -6135,8 +6278,8 @@ ${getCleanFeatType(slot.type)}`;
             switchPage(1);
         }
         await applyRouteFromLocation(!window.location.hash);
-        initSupabase().then(() => applyRouteFromLocation(true)).catch(err => {
-            console.warn('Supabase init error', err);
+        initCloud().then(() => applyRouteFromLocation(true)).catch(err => {
+            console.warn('Cloud init error', err);
             updateCloudAuthUI('Облако недоступно, работает локальное сохранение');
         });
         requestAnimationFrame(updateAttackTagsOverflow);

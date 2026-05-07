@@ -5182,7 +5182,7 @@ ${getCleanFeatType(slot.type)}`;
         }
     }
 
-    function loginNicknameAccount() {
+    async function loginNicknameAccount() {
         const input = document.getElementById('account-nickname-input');
         const nickname = normalizeAccountNickname(input?.value || '');
         if (!nickname) {
@@ -5194,6 +5194,7 @@ ${getCleanFeatType(slot.type)}`;
         if (input) input.value = '';
         updateAccountUI('Аккаунт открыт');
         closeModal('accountModal');
+        await syncAccountProfileFromCloud();
     }
 
     function logoutNicknameAccount() {
@@ -5253,6 +5254,36 @@ ${getCleanFeatType(slot.type)}`;
             auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
         });
         updateAccountUI();
+        if (cloudUser) await syncAccountProfileFromCloud(false);
+    }
+
+    async function fetchAccountBackupRow() {
+        if (!supabaseClient || !cloudUser) return { data: null, error: null };
+        const nicknameKey = accountStorageKey(cloudUser.nickname);
+        return supabaseClient
+            .from('account_backups')
+            .select('data,profile_avatar,updated_at')
+            .eq('nickname_key', nicknameKey)
+            .maybeSingle();
+    }
+
+    async function syncAccountProfileFromCloud(showMessage = true) {
+        if (!cloudUser || !supabaseClient) return;
+        if (showMessage) setCloudSyncStatus('Проверяю профиль в облаке...');
+        const { data: row, error } = await fetchAccountBackupRow();
+        if (error) {
+            console.warn('Cloud profile load error', error);
+            updateCloudAuthUI(`Не удалось загрузить профиль: ${error.message || 'ошибка Supabase'}`);
+            return;
+        }
+        const avatar = row?.profile_avatar || row?.data?.profileAvatar || '';
+        if (avatar) {
+            cloudUser.avatar = avatar;
+            writeAccountProfile(cloudUser);
+            updateAccountUI(showMessage ? 'Профиль загружен из облака' : '');
+        } else if (showMessage) {
+            updateAccountUI('Аккаунт открыт');
+        }
     }
 
     function requireNicknameAccount() {
@@ -5321,19 +5352,13 @@ ${getCleanFeatType(slot.type)}`;
             return;
         }
         setCloudSyncStatus('Ищу данные в облаке...');
-        const nicknameKey = accountStorageKey(cloudUser.nickname);
-        const { data, error } = await supabaseClient
-            .from('account_backups')
-            .select('data,profile_avatar,updated_at')
-            .eq('nickname_key', nicknameKey)
-            .order('updated_at', { ascending: false })
-            .limit(1);
+        const { data: row, error } = await fetchAccountBackupRow();
         if (error) {
             console.warn('Cloud account load error', error);
-            updateCloudAuthUI('Не удалось загрузить данные облака');
+            updateCloudAuthUI(`Не удалось загрузить данные облака: ${error.message || 'ошибка Supabase'}`);
             return;
         }
-        const snapshot = data?.[0]?.data || null;
+        const snapshot = row?.data || null;
         if (!snapshot || !Array.isArray(snapshot.characters)) {
             updateCloudAuthUI('В облаке нет данных для этого ника');
             return;

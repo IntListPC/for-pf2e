@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02">
+    <link rel="stylesheet" href="css/styles.css?v=1.03">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -41,7 +41,7 @@
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
-            <h1 class="character-menu-title">Персонажи</h1>
+            <h1 class="character-menu-title">Мастерская</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
                 <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
                 <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
@@ -49,6 +49,10 @@
                     <button type="button" onclick="handleCloudMenuLoad(event)">Из Облака</button>
                 </div>
             </div>
+        </div>
+        <div class="workshop-tabs" role="tablist" aria-label="Мастерская">
+            <button type="button" id="workshop-tab-bestiary" class="workshop-tab active" onclick="setWorkshopTab('bestiary')">Бестиарий</button>
+            <button type="button" id="workshop-tab-initiative" class="workshop-tab" onclick="setWorkshopTab('initiative')">Инициатива</button>
         </div>
         <div class="character-menu-toolbar">
             <div id="character-count" class="character-count">0/10</div>
@@ -58,7 +62,7 @@
             </div>
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.02<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.03<br>by RubiDus</div>
     </div>
 </div>
 
@@ -922,9 +926,9 @@
     <h3>Настройки здоровья</h3>
     <label class="l">Текущие ОЗ</label>
     <input type="number" id="in-hp-cur" oninput="clampCurrentHPInput(); saveAll()">
-    <label class="l">ОЗ народа</label>
+    <label class="l" id="hp-base-label">ОЗ народа</label>
     <input type="number" id="in-hp-anc" value="8" oninput="saveAll()">
-    <label class="l">ОЗ класса</label>
+    <label class="l" id="hp-class-label">ОЗ класса</label>
     <input type="number" id="in-hp-cls" value="10" oninput="saveAll()">
     <button onclick="closeModal('hpSettingsModal')" class="btn-primary">ГОТОВО</button>
 </div></div>
@@ -947,7 +951,7 @@
     <button onclick="repairShield()" class="btn-primary">ПОЧИНИТЬ</button><button onclick="closeModal('shieldModal')" class="btn-sec">ЗАКРЫТЬ</button>
 </div></div>
 
-<div id="profileModal" class="modal"><div class="modal-content"><h3>Профиль</h3><label class="l">Имя</label><input type="text" id="in-name" oninput="saveAll()"><div style="display:flex; gap:12px"><div style="flex:1"><label class="l">Народ</label><input type="text" id="in-anc" oninput="saveAll()"></div><div style="flex:1"><label class="l">Класс</label><input type="text" id="in-cls" oninput="saveAll()"></div></div><div style="display:flex; gap:12px"><div><label class="l">Уровень</label><input type="number" id="in-lvl" min="1" max="20" oninput="this.value = Math.min(20, Math.max(1, parseInt(this.value)||1)); saveAll()" onblur="this.value = Math.min(20, Math.max(1, parseInt(this.value)||1)); saveAll()"></div><div><label class="l">Скорость</label><input type="number" id="in-speed" oninput="saveAll()"></div></div><label class="l">Опыт</label><input type="number" id="in-exp" oninput="saveAll()"><button onclick="closeModal('profileModal')" class="btn-primary">СОХРАНИТЬ</button></div></div>
+<div id="profileModal" class="modal"><div class="modal-content"><h3>Профиль</h3><label class="l">Имя</label><input type="text" id="in-name" oninput="saveAll()"><div style="display:flex; gap:12px"><div style="flex:1"><label class="l">Народ</label><input type="text" id="in-anc" oninput="saveAll()"></div><div style="flex:1"><label class="l">Класс</label><input type="text" id="in-cls" oninput="saveAll()"></div></div><div style="display:flex; gap:12px"><div><label class="l">Уровень</label><input type="number" id="in-lvl" min="-1" max="20" oninput="clampProfileLevelInput()" onblur="clampProfileLevelInput()"></div><div><label class="l">Скорость</label><input type="number" id="in-speed" oninput="saveAll()"></div></div><label class="l">Опыт</label><input type="number" id="in-exp" oninput="saveAll()"><button onclick="closeModal('profileModal')" class="btn-primary">СОХРАНИТЬ</button></div></div>
 
 <div id="abilityModal" class="modal"><div class="modal-content"><h3 id="ab-modal-title"></h3><input type="hidden" id="ab-modal-key"><label class="l">Модификатор</label><input type="number" id="ab-modal-val" min="-5" max="10" oninput="previewAbilityModal()"><div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;"><input type="checkbox" id="ab-modal-half"><label for="ab-modal-half" class="l">Повышение ½</label></div><div id="ab-modal-lores" style="display:none"><label class="l">Знания</label><input type="text" id="in-lore-1" placeholder="Знание 1"><input type="text" id="in-lore-2" placeholder="Знание 2"><input type="text" id="in-lore-3" placeholder="Знание 3"></div><button onclick="saveAbilityModal()" class="btn-primary">ГОТОВО</button></div></div>
 
@@ -995,9 +999,9 @@
     <h3>Перейти на страницу</h3>
     <div class="menu-item" onclick="navClick(0)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Характеристики</div>
     <div class="menu-item" onclick="navClick(1)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Атаки</div>
-    <div class="menu-item" onclick="navClick(2)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Фиты</div>
+    <div class="menu-item" id="page-nav-feats" onclick="navClick(2)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Фиты</div>
     <div class="menu-item" onclick="navClick(3)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Снаряжение</div>
-    <div class="menu-item" onclick="navClick(4)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Личность</div>
+    <div class="menu-item" id="page-nav-personality" onclick="navClick(4)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Личность</div>
     <div class="menu-item" id="page-nav-magic" onclick="navClick(5)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Магия</div>
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>

@@ -3,6 +3,8 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const CHARACTERS_KEY = 'pf2_characters_v1';
     const ACTIVE_CHARACTER_KEY = 'pf2_active_character_id';
     const MAX_CHARACTERS = 10;
+    const SHEET_TYPE_CHARACTER = 'character';
+    const SHEET_TYPE_BESTIARY = 'bestiary';
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
@@ -13,6 +15,8 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
 
     let characters = [];
     let activeCharacterId = null;
+    let activeSheetType = SHEET_TYPE_CHARACTER;
+    let currentWorkshopTab = 'bestiary';
     let characterDeleteSelectMode = false;
     let characterPendingDeleteIds = new Set();
     let characterMenuOpenId = null;
@@ -42,7 +46,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let touchStartTarget = null;
 
     function navClick(idx) {
-        if (idx === 5 && !isMagicEnabled()) return;
+        if (!getAvailablePageIndexes().includes(idx)) return;
         if (window.innerWidth < 1000 && currentPage === idx) {
             openModal('pageNavModal');
         } else {
@@ -51,23 +55,36 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         }
     }
 
-    function switchPage(idx) {
-        let newIdx = idx;
-        const isPC = window.innerWidth >= 1000;
-        
-        if (isPC) {
-            if (newIdx < 1) newIdx = 1;
-            if (newIdx >= totalPages) newIdx = totalPages - 1;
-        } else {
-            if (newIdx < 0) newIdx = totalPages - 1;
-            else if (newIdx >= totalPages) newIdx = 0;
-        }
+    function getAvailablePageIndexes() {
+        const bestiaryMode = isBestiarySheet();
+        let pages = bestiaryMode ? [0, 1, 3] : [0, 1, 2, 3, 4, 5];
+        if (!isMagicEnabled()) pages = pages.filter(idx => idx !== 5);
+        if (window.innerWidth >= 1000) pages = pages.filter(idx => idx !== 0);
+        return pages.length ? pages : [0];
+    }
 
-        if (!isMagicEnabled() && newIdx === 5) newIdx = isPC ? 4 : (idx > currentPage ? 0 : 4);
+    function resolvePageIndex(idx, pages, isPC) {
+        if (pages.includes(idx)) return idx;
+        const sorted = [...pages].sort((a, b) => a - b);
+        const direction = idx >= currentPage ? 1 : -1;
+        if (direction > 0) {
+            const next = sorted.find(page => page > currentPage);
+            if (next !== undefined) return next;
+            return isPC ? sorted[sorted.length - 1] : sorted[0];
+        }
+        const prev = [...sorted].reverse().find(page => page < currentPage);
+        if (prev !== undefined) return prev;
+        return isPC ? sorted[0] : sorted[sorted.length - 1];
+    }
+
+    function switchPage(idx) {
+        const isPC = window.innerWidth >= 1000;
+        const pages = getAvailablePageIndexes();
+        let newIdx = resolvePageIndex(idx, pages, isPC);
 
         currentPage = newIdx;
         const slider = document.getElementById('pages-slider');
-        slider.style.transform = `translateX(-${currentPage * (100 / totalPages)}%)`;
+        if (slider) slider.style.transform = `translateX(-${currentPage * (100 / totalPages)}%)`;
         
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById(`btn-p${currentPage}`);
@@ -81,6 +98,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     }
 
     function isMagicEnabled() {
+        if (isBestiarySheet()) return false;
         return !!document.getElementById('use-magic')?.checked;
     }
 
@@ -97,13 +115,17 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
 
     function syncMagicUsage() {
         const enabled = isMagicEnabled();
+        const bestiaryMode = isBestiarySheet();
         const btn = document.getElementById('btn-p5');
         const navItem = document.getElementById('page-nav-magic');
         const wrap = document.getElementById('use-magic-wrap');
         if (btn) btn.style.display = enabled ? '' : 'none';
         if (navItem) navItem.style.display = enabled ? '' : 'none';
-        if (wrap) wrap.classList.toggle('active', enabled);
-        if (!enabled && currentPage === 5) switchPage(window.innerWidth >= 1000 ? 4 : 0);
+        if (wrap) {
+            wrap.classList.toggle('active', enabled);
+            wrap.style.display = bestiaryMode ? 'none' : '';
+        }
+        if (!enabled && currentPage === 5) switchPage(window.innerWidth >= 1000 ? 3 : 0);
     }
 
     function syncFocusUsage() {
@@ -380,8 +402,55 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
             .replace(/\n/g, '\\n');
     }
 
+    function clampLevelForType(val, type = getActiveSheetType()) {
+        const isBestiary = type === SHEET_TYPE_BESTIARY;
+        const fallback = isBestiary ? 0 : 1;
+        const parsed = parseInt(val);
+        const clean = Number.isFinite(parsed) ? parsed : fallback;
+        return Math.max(isBestiary ? -1 : 1, Math.min(20, clean));
+    }
+
     function clampLevel(val) {
-        return Math.max(1, Math.min(20, parseInt(val) || 1));
+        return clampLevelForType(val, getActiveSheetType());
+    }
+
+    function getActiveSheetType() {
+        return activeSheetType === SHEET_TYPE_BESTIARY ? SHEET_TYPE_BESTIARY : SHEET_TYPE_CHARACTER;
+    }
+
+    function getSheetType(sheet = null) {
+        return String(sheet?._sheetType || SHEET_TYPE_CHARACTER) === SHEET_TYPE_BESTIARY ? SHEET_TYPE_BESTIARY : SHEET_TYPE_CHARACTER;
+    }
+
+    function isBestiarySheet(sheet = null) {
+        return sheet ? getSheetType(sheet) === SHEET_TYPE_BESTIARY : getActiveSheetType() === SHEET_TYPE_BESTIARY;
+    }
+
+    function clampProfileLevelInput() {
+        const input = document.getElementById('in-lvl');
+        if (!input) return;
+        input.value = clampLevel(input.value);
+        saveAll();
+    }
+
+    function updateSheetModeUI() {
+        const bestiaryMode = isBestiarySheet();
+        document.body.classList.toggle('bestiary-sheet', bestiaryMode);
+        document.body.classList.toggle('character-sheet', !bestiaryMode);
+        const lvlInput = document.getElementById('in-lvl');
+        if (lvlInput) {
+            lvlInput.min = bestiaryMode ? '-1' : '1';
+            lvlInput.max = '20';
+        }
+        const hpBaseLabel = document.getElementById('hp-base-label');
+        const hpClassLabel = document.getElementById('hp-class-label');
+        const hpClassInput = document.getElementById('in-hp-cls');
+        if (hpBaseLabel) hpBaseLabel.innerText = bestiaryMode ? 'Макс ОЗ' : 'ОЗ народа';
+        if (hpClassLabel) hpClassLabel.style.display = bestiaryMode ? 'none' : '';
+        if (hpClassInput) hpClassInput.style.display = bestiaryMode ? 'none' : '';
+        syncSheetSettings();
+        const pages = getAvailablePageIndexes();
+        if (!pages.includes(currentPage)) switchPage(pages[0]);
     }
 
     function renderAttackModalOptions() {
@@ -3129,9 +3198,9 @@ ${getCleanFeatType(slot.type)}`;
 
     function getMobileReorderModeForCurrentPage() {
         if (window.innerWidth >= 1000) return null;
-        if (document.body.classList.contains('main-menu-open')) return characters.length > 1 ? 'characters' : null;
+        if (document.body.classList.contains('main-menu-open')) return currentWorkshopTab === 'bestiary' && characters.length > 1 ? 'characters' : null;
         if (currentPage === 1 && attacks.length > 1) return 'attacks';
-        if (currentPage === 2 && currentFeatTab === 'my' && myFeats.length > 1) return 'feats';
+        if (!isBestiarySheet() && currentPage === 2 && currentFeatTab === 'my' && myFeats.length > 1) return 'feats';
         return null;
     }
 
@@ -3271,11 +3340,12 @@ ${getCleanFeatType(slot.type)}`;
 
 
     function getCurrentMaxHP() {
+        const anc = parseInt(document.getElementById('in-hp-anc')?.value) || 0;
+        if (isBestiarySheet()) return Math.max(0, anc);
         const lvlEl = document.getElementById('in-lvl');
         const lvl = lvlEl ? clampLevel(lvlEl.value) : 1;
         const conEl = document.getElementById('score-con');
         const con = conEl ? (parseInt(conEl.value) || 0) : (abilities.con || 0);
-        const anc = parseInt(document.getElementById('in-hp-anc')?.value) || 0;
         const cls = parseInt(document.getElementById('in-hp-cls')?.value) || 0;
         return Math.max(0, anc + (cls + con) * lvl);
     }
@@ -5445,6 +5515,7 @@ ${getCleanFeatType(slot.type)}`;
         updateAccountUI();
         showAccountMenuView();
         document.body.classList.add('main-menu-open');
+        document.body.classList.remove('bestiary-sheet', 'character-sheet');
         renderCharacterMenu();
         if (appRouteReady) setRoute('menu', null, true);
     }
@@ -5834,6 +5905,7 @@ ${getCleanFeatType(slot.type)}`;
         const defaultClassHP = 10;
         const defaultMaxHP = Math.max(0, defaultAncestryHP + (defaultClassHP + defaultCon) * defaultLevel);
         return {
+            _sheetType: SHEET_TYPE_CHARACTER,
             skillProf: {}, saveProf: {}, heroPoints: 0, itemBonuses: {}, lores: { 1: '', 2: '', 3: '' },
             abilities: { str: 0, dex: 0, con: defaultCon, int: 0, wis: 0, cha: 0 },
             partialBoosts: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
@@ -5857,6 +5929,28 @@ ${getCleanFeatType(slot.type)}`;
             'in-ac-item': 0, 'in-ac-pen': 0, 'in-ac-cap': 0, 'in-ac-prof': 0,
             'use-magic': false, 'use-focus': false, 'focus-points-max': 1, 'has-shield': false, 'sh-bonus': 0, 'sh-hard': 0, 'sh-hp-max': 0, 'sh-hp-cur': 0,
             'shield-raised': false, 'use-shield-damage': false, 'hp-critical-damage': false
+        };
+    }
+
+    function createBlankBestiarySheetData(name = 'Новое существо') {
+        return {
+            ...createBlankSheetData(name),
+            _sheetType: SHEET_TYPE_BESTIARY,
+            heroPoints: 0,
+            feats: {},
+            myFeats: [],
+            spells: [],
+            spellSlotsSpent: {},
+            'in-name': name,
+            'in-anc': '',
+            'in-cls': '',
+            'in-lvl': 0,
+            'in-exp': 0,
+            'in-hp-cur': 20,
+            'in-hp-anc': 20,
+            'in-hp-cls': 0,
+            'use-magic': false,
+            'use-focus': false
         };
     }
 
@@ -5915,7 +6009,7 @@ ${getCleanFeatType(slot.type)}`;
             if (a?.tagsHidden) hiddenTagsSnapshot[a.id] = true;
         });
         normalizeSpellData();
-        const s = { skillProf, saveProf, heroPoints, itemBonuses, lores, abilities, partialBoosts, dyingLevel, firstRun, attacks: savedAttacks, attackTagsHiddenById: hiddenTagsSnapshot, attackNotes, attackQuickFeatIds, attackQuickFeatSelectionCustom, attackMapPenaltyCount, attackCourageCount, attackMapSettings, attackDcSettings: normalizeAttackDcSettings(attackDcSettings), proficiencies: normalizeProficiencies(proficiencies), spells, spellSlotsSpent, spellSettings: normalizeSpellSettings(spellSettings), lastDeathCheck, feats, myFeats, currentFeatTab, equipmentItems, equipmentBackpack, equipmentSettings, currentEquipmentTab, headerCollapsed, hpKeypadOpen, personalitySectionCollapsed };
+        const s = { _sheetType: getActiveSheetType(), skillProf, saveProf, heroPoints, itemBonuses, lores, abilities, partialBoosts, dyingLevel, firstRun, attacks: savedAttacks, attackTagsHiddenById: hiddenTagsSnapshot, attackNotes, attackQuickFeatIds, attackQuickFeatSelectionCustom, attackMapPenaltyCount, attackCourageCount, attackMapSettings, attackDcSettings: normalizeAttackDcSettings(attackDcSettings), proficiencies: normalizeProficiencies(proficiencies), spells, spellSlotsSpent, spellSettings: normalizeSpellSettings(spellSettings), lastDeathCheck, feats, myFeats, currentFeatTab, equipmentItems, equipmentBackpack, equipmentSettings, currentEquipmentTab, headerCollapsed, hpKeypadOpen, personalitySectionCollapsed };
         const ids = new Set();
         document.querySelectorAll('input, select, textarea').forEach(el => {
             if (!el.id || el.type === 'file' || ids.has(el.id)) return;
@@ -5929,7 +6023,10 @@ ${getCleanFeatType(slot.type)}`;
 
     function normalizeLoadedSheet(s) {
         s = s || createBlankSheetData();
-        return { ...createBlankSheetData(s['in-name'] || 'Герой'), ...s };
+        const type = getSheetType(s);
+        const name = s['in-name'] || (type === SHEET_TYPE_BESTIARY ? 'Существо' : 'Герой');
+        const base = type === SHEET_TYPE_BESTIARY ? createBlankBestiarySheetData(name) : createBlankSheetData(name);
+        return { ...base, ...s, _sheetType: type };
     }
 
     function repairLoadedFeats() {
@@ -5943,23 +6040,35 @@ ${getCleanFeatType(slot.type)}`;
 
 
     function getCharacterMetaFromSheet(s) {
-        const name = String(s?.['in-name'] || '').trim() || 'Герой';
+        const type = getSheetType(s);
+        const name = String(s?.['in-name'] || '').trim() || (type === SHEET_TYPE_BESTIARY ? 'Существо' : 'Герой');
+        const lvl = clampLevelForType(s?.['in-lvl'], type);
+        if (type === SHEET_TYPE_BESTIARY) return { name, meta: `Уровень ${lvl}`, updatedAt: Date.now() };
         const anc = String(s?.['in-anc'] || '').trim() || 'Народ';
         const cls = String(s?.['in-cls'] || '').trim() || 'Класс';
-        const lvl = clampLevel(s?.['in-lvl'] || 1);
         return { name, meta: `${anc} — ${cls} ${lvl}`, updatedAt: Date.now() };
     }
 
     function getCharacterHPFromSheet(s) {
-        const lvl = clampLevel(s?.['in-lvl'] || 1);
+        const type = getSheetType(s);
+        const lvl = clampLevelForType(s?.['in-lvl'], type);
         const con = parseInt(s?.abilities?.con) || 0;
         const anc = parseInt(s?.['in-hp-anc']) || 0;
         const cls = parseInt(s?.['in-hp-cls']) || 0;
-        const max = Math.max(0, anc + (cls + con) * lvl);
+        const max = type === SHEET_TYPE_BESTIARY ? Math.max(0, anc) : Math.max(0, anc + (cls + con) * lvl);
         let cur = parseInt(s?.['in-hp-cur']);
         if (!Number.isFinite(cur)) cur = max;
         cur = Math.max(0, Math.min(max, cur));
         return { cur, max };
+    }
+
+    function getCharacterACFromSheet(s) {
+        const dex = parseInt(s?.abilities?.dex) || 0;
+        const item = parseInt(s?.['in-ac-item']) || 0;
+        const capRaw = parseInt(s?.['in-ac-cap']);
+        const cap = Number.isFinite(capRaw) && capRaw > 0 ? capRaw : 10;
+        const prof = parseInt(s?.['in-ac-prof']) || 0;
+        return 10 + Math.min(dex, cap) + item + prof;
     }
 
     function getCharacterHPColorClass(hp) {
@@ -6028,6 +6137,20 @@ ${getCleanFeatType(slot.type)}`;
         if (!characterMenuOpenId) return;
         characterMenuOpenId = null;
         renderCharacterMenu();
+    }
+
+    function setWorkshopTab(tab) {
+        currentWorkshopTab = tab === 'initiative' ? 'initiative' : 'bestiary';
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        renderCharacterMenu();
+    }
+
+    function renderWorkshopTabs() {
+        const bestiaryBtn = document.getElementById('workshop-tab-bestiary');
+        const initiativeBtn = document.getElementById('workshop-tab-initiative');
+        if (bestiaryBtn) bestiaryBtn.classList.toggle('active', currentWorkshopTab === 'bestiary');
+        if (initiativeBtn) initiativeBtn.classList.toggle('active', currentWorkshopTab === 'initiative');
     }
 
     function renderCharacterToolbarMenu() {
@@ -6195,9 +6318,19 @@ ${getCleanFeatType(slot.type)}`;
             if (pendingDelete) characterToolbarMenuOpen = false;
             renderCharacterToolbarMenu();
         }
+        renderWorkshopTabs();
         const reorderActive = mobileReorderMode === 'characters';
+        if (currentWorkshopTab === 'initiative') {
+            if (uploadBtn) uploadBtn.style.visibility = 'hidden';
+            if (countEl) countEl.innerText = 'Инициатива';
+            list.innerHTML = `<div class="initiative-placeholder"><div class="initiative-placeholder-title">Инициатива</div><div class="initiative-placeholder-text">Вкладка готова как место под следующий шаг. Бестиарий уже создаёт отдельные листы существ.</div></div>`;
+            syncMobileReorderButtons();
+            return;
+        }
+        if (uploadBtn) uploadBtn.style.visibility = '';
+        if (countEl) countEl.innerText = `${characters.length}/${MAX_CHARACTERS}`;
         const addCardHtml = (!characterDeleteSelectMode && !reorderActive && characters.length < MAX_CHARACTERS)
-            ? `<button type="button" class="character-add-card" onclick="addCharacter()" title="Добавить персонажа"><span class="character-add-avatar">+</span></button>`
+            ? `<button type="button" class="character-add-card" onclick="addCharacter()" title="Добавить лист бестиария"><span class="character-add-avatar">+</span></button>`
             : '';
         if (!characters.length) {
             list.innerHTML = addCardHtml;
@@ -6216,12 +6349,13 @@ ${getCleanFeatType(slot.type)}`;
             const meta = sheet ? getCharacterMetaFromSheet(sheet) : { name: ch.name || 'Герой', meta: ch.meta || 'Народ — Класс 1' };
             const hp = sheet ? getCharacterHPFromSheet(sheet) : { cur: 0, max: 0 };
             const hpClass = getCharacterHPColorClass(hp);
+            const ac = sheet ? getCharacterACFromSheet(sheet) : 10;
             const draggable = (!characterDeleteSelectMode && !reorderActive && window.innerWidth >= 1000) ? 'true' : 'false';
             const dragHandleClick = window.innerWidth < 1000 ? `handleCharacterDragHandleClick(event, ${idx})` : `event.stopPropagation()`;
             const dragHandleTitle = window.innerWidth < 1000 ? 'Нажми для перемещения' : 'Зажми и перетащи';
             const menuOpen = String(characterMenuOpenId || '') === id;
             const menuHtml = menuOpen ? `<div class="character-context-menu" onclick="event.stopPropagation()"><button type="button" onclick="exportCharacterJSON('${id}', event)">Скачать</button><button type="button" onclick="cloneCharacter('${id}', event)">Клонировать</button><button type="button" class="danger" onclick="queueCharacterDelete('${id}', event)">Удалить</button></div>` : '';
-            return `<div class="character-card ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div><div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div><div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions"><button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
+            return `<div class="character-card bestiary-card ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Существо')}</div><div class="bestiary-card-stats"><span class="character-hp ${hpClass}"><b>Хиты</b><span class="character-hp-value">${hp.cur}/${hp.max}</span></span><span class="character-ac"><b>КЗ</b><span>${ac}</span></span></div></div><div class="character-card-actions"><button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню листа" aria-label="Меню листа">•••</button>${menuHtml}</div></div>`;
         }).join('') + addCardHtml;
         syncMobileReorderButtons();
     }
@@ -6274,6 +6408,7 @@ ${getCleanFeatType(slot.type)}`;
         characterDeleteSelectMode = characterPendingDeleteIds.size > 0;
         characterMenuOpenId = null;
         document.body.classList.add('main-menu-open');
+        document.body.classList.remove('bestiary-sheet', 'character-sheet');
         renderCharacterMenu();
         if (!fromRoute) setRoute('menu', null, replaceRoute);
         if (shouldAutoSaveOnMenu) maybeAutoSaveAccountOnMenu();
@@ -6290,14 +6425,14 @@ ${getCleanFeatType(slot.type)}`;
 
     async function addCharacter() {
         if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+            alert('Пока можно создать не больше 10 листов.');
             return;
         }
         if (activeCharacterId) saveAll(false);
         characterDeleteSelectMode = false;
         mobileReorderMode = null;
         selectedMobileReorder = null;
-        const sheet = createBlankSheetData('Новый герой');
+        const sheet = createBlankBestiarySheetData('Новое существо');
         const row = cloudUser ? await createCloudCharacter(sheet) : null;
         const id = row?.id || makeCharacterId();
         writeCharacterSheet(id, sheet);
@@ -6312,7 +6447,7 @@ ${getCleanFeatType(slot.type)}`;
         if (event) event.stopPropagation();
         if (characterDeleteSelectMode) return;
         if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+            alert('Пока можно создать не больше 10 листов.');
             return;
         }
         if (activeCharacterId) saveAll(false);
@@ -6366,6 +6501,8 @@ ${getCleanFeatType(slot.type)}`;
         isLoadingSheet = true;
         resetSheetRuntimeState();
         s = normalizeLoadedSheet(s);
+        activeSheetType = getSheetType(s);
+        updateSheetModeUI();
         Object.assign(skillProf, s.skillProf || {}); Object.assign(saveProf, s.saveProf || {});
         heroPoints = s.heroPoints || 0; Object.assign(itemBonuses, s.itemBonuses || {});
         Object.assign(lores, s.lores || {}); Object.assign(abilities, s.abilities || {}); Object.assign(partialBoosts, s.partialBoosts || {});
@@ -6404,7 +6541,7 @@ ${getCleanFeatType(slot.type)}`;
         if (lvlEl) setFieldValueAll('in-lvl', clampLevel(lvlEl.value));
         const avatar = activeCharacterId ? localStorage.getItem(characterAvatarKey(activeCharacterId)) : '';
         showAv(avatar || '');
-        applyHeaderCollapsedState(); applyHpKeypadState(); syncSheetSettings(); syncAttackNotesPreview(); renderPersonalitySections(); renderPersonalityNotes(); renderProficiencies(); renderMagic(); renderAttackQuickFeats(); renderEquipment();
+        applyHeaderCollapsedState(); applyHpKeypadState(); updateSheetModeUI(); syncSheetSettings(); syncAttackNotesPreview(); renderPersonalitySections(); renderPersonalityNotes(); renderProficiencies(); renderMagic(); renderAttackQuickFeats(); renderEquipment();
         snapshotLevelUpReadyState();
         isLoadingSheet = false;
         calculate();
@@ -6428,6 +6565,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         if (!activeCharacterId) {
             document.body.classList.add('main-menu-open');
+            document.body.classList.remove('bestiary-sheet', 'character-sheet');
             renderCharacterMenu();
             return;
         }
@@ -6470,7 +6608,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function startImportCharacterAsNew() {
         if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+            alert('Пока можно создать не больше 10 листов.');
             return;
         }
         characterDeleteSelectMode = false;
@@ -6632,7 +6770,7 @@ ${getCleanFeatType(slot.type)}`;
             let createdAsNew = false;
             if (!id) {
                 if (characters.length >= MAX_CHARACTERS) {
-                    alert('Пока можно создать не больше 10 персонажей.');
+                    alert('Пока можно создать не больше 10 листов.');
                     return;
                 }
                 id = makeCharacterId();
@@ -6711,6 +6849,8 @@ ${getCleanFeatType(slot.type)}`;
         exportAllCharactersJSON,
         startImportCharacterAsNew,
         confirmCloudDownload,
+        setWorkshopTab,
+        clampProfileLevelInput,
         openModal,
         closeModal
     });

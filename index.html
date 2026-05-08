@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02">
+    <link rel="stylesheet" href="css/styles.css?v=1.02a">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -41,7 +41,7 @@
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
-            <h1 class="character-menu-title">Персонажи</h1>
+            <h1 id="character-menu-title" class="character-menu-title">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
                 <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
                 <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
@@ -50,15 +50,31 @@
                 </div>
             </div>
         </div>
-        <div class="character-menu-toolbar">
-            <div id="character-count" class="character-count">0/10</div>
-            <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
-            <div class="character-toolbar-actions">
-                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
+        <div class="character-menu-tabs" role="tablist" aria-label="Страницы главного меню">
+            <button type="button" id="character-menu-tab-characters" class="character-menu-tab active" onclick="switchCharacterMenuPage('characters')" role="tab" aria-selected="true">Персонажи</button>
+            <button type="button" id="character-menu-tab-workshop" class="character-menu-tab" onclick="switchCharacterMenuPage('workshop')" role="tab" aria-selected="false">Мастерская</button>
+        </div>
+
+        <div id="character-page-characters" class="character-menu-page active" role="tabpanel" aria-labelledby="character-menu-tab-characters">
+            <div class="character-menu-toolbar">
+                <div id="character-count" class="character-count">0/10</div>
+                <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
+                <div class="character-toolbar-actions">
+                    <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
+                </div>
+            </div>
+            <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
+        </div>
+
+        <div id="character-page-workshop" class="character-menu-page workshop-page" role="tabpanel" aria-labelledby="character-menu-tab-workshop">
+            <div class="workshop-empty-card">
+                <div class="workshop-empty-icon">⚙️</div>
+                <div class="workshop-empty-title">Мастерская пока пустая</div>
+                <div class="workshop-empty-text">Позже здесь можно будет добавить НПС, инициативу боя и локальные инструменты мастера.</div>
             </div>
         </div>
-        <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.02<br>by RubiDus</div>
+
+        <div class="app-version-mark">IntListPC v1.02a<br>by RubiDus</div>
     </div>
 </div>
 
@@ -1002,7 +1018,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.02"></script>
+<script src="js/app.js?v=1.02a"></script>
 
 <div class="footer-spacer"></div>
 </body>

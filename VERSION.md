@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.02`
+Current version: `1.02a`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 

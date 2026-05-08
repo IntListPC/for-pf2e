@@ -18,6 +18,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let characterMenuOpenId = null;
     let characterToolbarMenuOpen = false;
     let cloudActionMenuOpen = false;
+    let characterMenuPage = 'characters';
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -6034,6 +6035,40 @@ ${getCleanFeatType(slot.type)}`;
         const menu = document.getElementById('character-toolbar-menu');
         if (menu) menu.classList.toggle('active', !!characterToolbarMenuOpen);
     }
+    function renderCharacterMenuPage() {
+        if (!['characters', 'workshop'].includes(characterMenuPage)) characterMenuPage = 'characters';
+        const isWorkshop = characterMenuPage === 'workshop';
+        const title = document.getElementById('character-menu-title');
+        const charactersPage = document.getElementById('character-page-characters');
+        const workshopPage = document.getElementById('character-page-workshop');
+        const charactersTab = document.getElementById('character-menu-tab-characters');
+        const workshopTab = document.getElementById('character-menu-tab-workshop');
+        const cloudButtons = document.getElementById('cloud-action-buttons');
+
+        if (title) title.innerText = isWorkshop ? 'Мастерская' : 'Персонажи';
+        if (charactersPage) charactersPage.classList.toggle('active', !isWorkshop);
+        if (workshopPage) workshopPage.classList.toggle('active', isWorkshop);
+        if (charactersTab) {
+            charactersTab.classList.toggle('active', !isWorkshop);
+            charactersTab.setAttribute('aria-selected', String(!isWorkshop));
+        }
+        if (workshopTab) {
+            workshopTab.classList.toggle('active', isWorkshop);
+            workshopTab.setAttribute('aria-selected', String(isWorkshop));
+        }
+        if (cloudButtons) cloudButtons.classList.toggle('hidden-on-workshop', isWorkshop);
+    }
+
+    function switchCharacterMenuPage(page) {
+        characterMenuPage = page === 'workshop' ? 'workshop' : 'characters';
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
+        renderCharacterToolbarMenu();
+        renderCloudActionMenu();
+        renderCharacterMenuPage();
+    }
+
 
     function closeCharacterToolbarMenu() {
         const hadCharacterMenu = !!characterToolbarMenuOpen;
@@ -6166,6 +6201,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function renderCharacterMenu() {
+        renderCharacterMenuPage();
         const list = document.getElementById('character-list');
         const uploadBtn = document.getElementById('character-upload-btn');
         const countEl = document.getElementById('character-count');

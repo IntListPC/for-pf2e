@@ -1,8 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.03`
-
-`1.03` - Added the Workshop menu with Bestiary/Initiative tabs. Bestiary cards now show avatar, name, HP, and AC, and newly added bestiary sheets open as trimmed creature sheets with characteristics, attacks, and equipment only; creature levels can be -1 through 20.
+Current version: `1.02`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 

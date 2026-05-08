@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.02d`
+Current version: `1.02`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 
@@ -22,15 +22,3 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 `1.01k` - Cloud save/load controls were combined into one stable cloud button with a dropdown menu; arrows animate only for the selected cloud direction and disappear afterward.
 
 `1.02` - After cloud save, the current account is forced back into local storage; cloud load now syncs the visible sheet to the newly loaded active character before returning to the menu, preventing old DOM state from overwriting a loaded character after refresh.
-
-`1.02a` - Main menu gained Characters/Workshop pages for future GM tools; workshop remains local-only.
-
-`1.02b` - Added a local GM checkbox in the account/profile menu. When GM mode is off, the main menu shows the old single “Персонажи” title; when it is on, the title is hidden and the Персонажи/Мастерская tabs are shown.
-
-
-`1.02c` - Reworked GM navigation: the main menu title is visible again and becomes the page switcher when GM mode is enabled; the tab buttons are hidden, mobile swipes switch between Characters and Workshop, and page changes now animate.
-
-
-`1.02d` - Workshop now has Bestiary and Initiative tabs. Bestiary supports local NPC cards with avatar, name, HP, AC, perception/saves, ability modifiers, selectable skills with proficiency-based rolls, attacks, and notes.
-
-`1.02e` - Мастерская: НПС теперь открываются полноценным локальным листом с вкладками Характеристики/Атаки, уровень -1..20 не влияет на бонусы.

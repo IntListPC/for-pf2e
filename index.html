@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02e">
+    <link rel="stylesheet" href="css/styles.css?v=1.02">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -41,7 +41,7 @@
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
-            <h1 id="character-menu-title" class="character-menu-title" onclick="handleCharacterMenuTitleClick()" title="Переключить страницу">Персонажи</h1>
+            <h1 class="character-menu-title">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
                 <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
                 <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
@@ -50,113 +50,15 @@
                 </div>
             </div>
         </div>
-        <div class="character-menu-tabs" role="tablist" aria-label="Страницы главного меню">
-            <button type="button" id="character-menu-tab-characters" class="character-menu-tab active" onclick="switchCharacterMenuPage('characters')" role="tab" aria-selected="true">Персонажи</button>
-            <button type="button" id="character-menu-tab-workshop" class="character-menu-tab" onclick="switchCharacterMenuPage('workshop')" role="tab" aria-selected="false">Мастерская</button>
-        </div>
-
-        <div id="character-page-characters" class="character-menu-page active" role="tabpanel" aria-labelledby="character-menu-tab-characters">
-            <div class="character-menu-toolbar">
-                <div id="character-count" class="character-count">0/10</div>
-                <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
-                <div class="character-toolbar-actions">
-                    <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
-                </div>
-            </div>
-            <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        </div>
-
-        <div id="character-page-workshop" class="character-menu-page workshop-page" role="tabpanel" aria-labelledby="character-menu-tab-workshop">
-            <div class="workshop-shell">
-                <div class="workshop-tabs" role="tablist" aria-label="Мастерская">
-                    <button type="button" id="workshop-tab-bestiary" class="workshop-tab active" onclick="switchWorkshopTab('bestiary')" role="tab" aria-selected="true">Бестиарий</button>
-                    <button type="button" id="workshop-tab-initiative" class="workshop-tab" onclick="switchWorkshopTab('initiative')" role="tab" aria-selected="false">Инициатива</button>
-                </div>
-
-                <div id="workshop-page-bestiary" class="workshop-subpage active" role="tabpanel" aria-labelledby="workshop-tab-bestiary">
-                    <div id="workshop-bestiary-list-view" class="workshop-bestiary-list-view">
-                        <div class="workshop-toolbar">
-                            <div class="workshop-toolbar-title">Бестиарий</div>
-                            <button type="button" class="workshop-add-btn" onclick="addWorkshopNpc()" title="Добавить НПС">+</button>
-                        </div>
-                        <div id="workshop-bestiary-list" class="workshop-bestiary-grid"></div>
-                    </div>
-
-                    <div id="workshop-npc-sheet" class="workshop-npc-sheet" aria-hidden="true">
-                        <input type="hidden" id="workshop-npc-id">
-
-                        <div class="workshop-sheet-banner">
-                            <button type="button" class="workshop-sheet-back" onclick="closeWorkshopNpcSheet()" title="Назад">‹</button>
-                            <button type="button" class="workshop-npc-avatar-edit" onclick="document.getElementById('workshopNpcAvatarInput').click()" title="Аватар НПС">
-                                <img id="workshop-npc-avatar-img" src="" alt="">
-                                <span id="workshop-npc-avatar-fallback">👹</span>
-                            </button>
-                            <div class="workshop-sheet-info">
-                                <label class="l">Имя</label>
-                                <input type="text" id="workshop-npc-name" placeholder="НПС">
-                                <div class="workshop-sheet-mini-grid">
-                                    <div><label class="l">Ур.</label><input type="number" id="workshop-npc-level" min="-1" max="20" value="0"></div>
-                                    <div><label class="l">КЗ</label><input type="number" id="workshop-npc-ac" value="10"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <input type="file" id="workshopNpcAvatarInput" style="display:none" onchange="handleWorkshopNpcAvatar(this)" accept="image/*">
-
-                        <div class="workshop-sheet-hp-row">
-                            <div><label class="l">Хиты</label><input type="number" id="workshop-npc-hp-cur" value="10"></div>
-                            <div><label class="l">Макс.</label><input type="number" id="workshop-npc-hp-max" value="10"></div>
-                            <input type="number" id="workshop-npc-hp-delta" class="workshop-hp-delta" placeholder="число">
-                            <button type="button" class="workshop-mini-roll" onclick="rollWorkshopNpcHp(-1)">Урон</button>
-                            <button type="button" class="workshop-mini-roll heal" onclick="rollWorkshopNpcHp(1)">Лечение</button>
-                        </div>
-
-                        <div class="workshop-sheet-nav">
-                            <button type="button" id="workshop-sheet-tab-stats" class="workshop-sheet-tab active" onclick="switchWorkshopNpcSheetPage('stats')">Характеристики</button>
-                            <button type="button" id="workshop-sheet-tab-attacks" class="workshop-sheet-tab" onclick="switchWorkshopNpcSheetPage('attacks')">Атаки</button>
-                        </div>
-
-                        <div id="workshop-sheet-page-stats" class="workshop-sheet-page active">
-                            <div class="workshop-section-title">Внимание и спасброски</div>
-                            <div id="workshop-npc-saves" class="workshop-save-grid"></div>
-
-                            <div class="workshop-section-title">Характеристики</div>
-                            <div id="workshop-npc-abilities" class="workshop-ability-grid"></div>
-
-                            <button type="button" class="workshop-skills-main-btn" onclick="openWorkshopSkillsModal()">
-                                <span>Навыки</span><b>Настроить</b>
-                            </button>
-                            <div id="workshop-npc-skills-preview" class="workshop-skills-preview workshop-skills-under-button"></div>
-                        </div>
-
-                        <div id="workshop-sheet-page-attacks" class="workshop-sheet-page">
-                            <div class="workshop-section-title split">
-                                <span>Атаки</span>
-                                <button type="button" class="workshop-small-btn" onclick="addWorkshopNpcAttackRow()">+</button>
-                            </div>
-                            <div id="workshop-npc-attacks" class="workshop-attack-editor"></div>
-
-                            <div class="workshop-section-title">Заметки</div>
-                            <textarea id="workshop-npc-notes" class="workshop-npc-notes" maxlength="4000" placeholder="Тактика, особенности, добыча..."></textarea>
-                        </div>
-
-                        <div class="workshop-sheet-actions">
-                            <button type="button" onclick="saveWorkshopNpcFromModal()" class="btn-primary">СОХРАНИТЬ</button>
-                            <button type="button" onclick="deleteWorkshopNpcFromModal()" class="btn-sec workshop-danger-btn">УДАЛИТЬ</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="workshop-page-initiative" class="workshop-subpage" role="tabpanel" aria-labelledby="workshop-tab-initiative">
-                    <div class="workshop-empty-card compact">
-                        <div class="workshop-empty-icon">⚔️</div>
-                        <div class="workshop-empty-title">Инициатива</div>
-                        <div class="workshop-empty-text">Здесь позже будет очередь боя, НПС и участники сцены. Пока вкладка пустая.</div>
-                    </div>
-                </div>
+        <div class="character-menu-toolbar">
+            <div id="character-count" class="character-count">0/10</div>
+            <div id="account-header-meta" class="account-header-meta account-toolbar-status"></div>
+            <div class="character-toolbar-actions">
+                <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
             </div>
         </div>
-
-        <div class="app-version-mark">IntListPC v1.02e<br>by RubiDus</div>
+        <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
+        <div class="app-version-mark">IntListPC v1.02<br>by RubiDus</div>
     </div>
 </div>
 
@@ -171,11 +73,6 @@
         <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
             <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
             <span><b>Автосинхронизация</b></span>
-        </label>
-
-        <label id="account-gm-mode-wrap" class="account-sync-toggle account-gm-toggle" for="account-gm-mode-toggle">
-            <input type="checkbox" id="account-gm-mode-toggle" onchange="toggleGmMode(this.checked)">
-            <span><b>ГМ</b></span>
         </label>
 
         <div id="account-menu-actions" class="account-menu-actions">
@@ -1105,16 +1002,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-
-<div id="workshopSkillsModal" class="modal"><div class="modal-content workshop-skills-modal">
-    <h3>Навыки НПС</h3>
-    <div class="feat-view-meta">Отметь навыки, которые будут отображаться в карточке НПС. Бонус считается от характеристики, уровня, владения и бонуса.</div>
-    <div id="workshop-skills-editor" class="workshop-skills-editor"></div>
-    <button type="button" onclick="saveWorkshopSkillsModal()" class="btn-primary">ГОТОВО</button>
-    <button type="button" onclick="closeModal('workshopSkillsModal')" class="btn-sec">ОТМЕНА</button>
-</div></div>
-
-<script src="js/app.js?v=1.02e"></script>
+<script src="js/app.js?v=1.02"></script>
 
 <div class="footer-spacer"></div>
 </body>

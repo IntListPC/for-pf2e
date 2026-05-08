@@ -5,8 +5,6 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const MAX_CHARACTERS = 10;
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
-    const GM_MODE_KEY = 'intlistpc_gm_mode_v1';
-    const WORKSHOP_KEY = 'intlistpc_workshop_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
@@ -20,14 +18,6 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let characterMenuOpenId = null;
     let characterToolbarMenuOpen = false;
     let cloudActionMenuOpen = false;
-    let characterMenuPage = 'characters';
-    let workshopTab = 'bestiary';
-    let workshopNpcs = [];
-    let currentWorkshopNpcId = null;
-    let currentWorkshopNpcAvatar = '';
-    let currentWorkshopNpcSkills = [];
-    let currentWorkshopNpcAttacks = [];
-    let currentWorkshopNpcSheetPage = 'stats';
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -167,23 +157,13 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     }
 
     function handleSwipe() {
+        if (isPageSwipeBlockedTarget(touchStartTarget)) return;
         const dx = touchEndX - touchStartX;
         const dy = touchEndY - touchStartY;
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
-        const elapsed = Date.now() - touchStartAt;
-
-        if (document.body.classList.contains('main-menu-open') && isGmModeEnabled() && touchStartTarget?.closest?.('#characterMenu')) {
-            if (isPageSwipeBlockedTarget(touchStartTarget)) return;
-            const menuThreshold = Math.max(86, window.innerWidth * 0.22);
-            if (elapsed > 900 || absX < menuThreshold || absX < absY * 1.45) return;
-            if (dx < 0) switchCharacterMenuPage('workshop', 'next');
-            if (dx > 0) switchCharacterMenuPage('characters', 'prev');
-            return;
-        }
-
-        if (isPageSwipeBlockedTarget(touchStartTarget)) return;
         const threshold = Math.max(115, window.innerWidth * 0.28);
+        const elapsed = Date.now() - touchStartAt;
         if (elapsed > 800 || absX < threshold || absX < absY * 1.65) return;
         if (dx < 0) switchPage(currentPage + 1);
         if (dx > 0) switchPage(currentPage - 1);
@@ -5176,8 +5156,7 @@ ${getCleanFeatType(slot.type)}`;
                 id: profile.id || hashAccountToUuid(nickname),
                 nickname,
                 avatar: profile.avatar || '',
-                autoSync: !!profile.autoSync,
-                gmMode: !!profile.gmMode
+                autoSync: !!profile.autoSync
             };
         } catch (e) {
             console.warn('Account profile read error', e);
@@ -5194,33 +5173,8 @@ ${getCleanFeatType(slot.type)}`;
             id: profile.id || hashAccountToUuid(profile.nickname),
             nickname: normalizeAccountNickname(profile.nickname),
             avatar: profile.avatar || '',
-            autoSync: !!profile.autoSync,
-            gmMode: !!profile.gmMode
+            autoSync: !!profile.autoSync
         }), false);
-    }
-
-    function isGmModeEnabled() {
-        const profile = cloudUser || readAccountProfile();
-        if (profile && typeof profile.gmMode === 'boolean') return !!profile.gmMode;
-        return localStorage.getItem(GM_MODE_KEY) === '1';
-    }
-
-    function writeGmMode(enabled) {
-        const value = !!enabled;
-        safeStorageSet(GM_MODE_KEY, value ? '1' : '0', false);
-        const profile = cloudUser || readAccountProfile();
-        if (profile) {
-            profile.gmMode = value;
-            cloudUser = profile;
-            writeAccountProfile(profile);
-        }
-    }
-
-    function toggleGmMode(enabled) {
-        writeGmMode(!!enabled);
-        if (!isGmModeEnabled()) characterMenuPage = 'characters';
-        updateAccountUI();
-        renderCharacterMenuPage();
     }
 
     function getDefaultProfileIcon() {
@@ -5349,7 +5303,6 @@ ${getCleanFeatType(slot.type)}`;
         const actions = document.getElementById('cloud-action-buttons');
         const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
         const autoSyncWrap = document.getElementById('account-auto-sync-wrap');
-        const gmModeToggle = document.getElementById('account-gm-mode-toggle');
         const menuActions = document.getElementById('account-menu-actions');
         const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
@@ -5362,10 +5315,8 @@ ${getCleanFeatType(slot.type)}`;
             autoSyncToggle.disabled = !loggedIn;
         }
         if (autoSyncWrap) autoSyncWrap.style.display = loggedIn ? 'flex' : 'none';
-        if (gmModeToggle) gmModeToggle.checked = isGmModeEnabled();
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
-        renderCharacterMenuPage();
         updateAccountSummary(message);
     }
 
@@ -5410,8 +5361,7 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(nickname),
             nickname,
             avatar: previous?.avatar || '',
-            autoSync: false,
-            gmMode: isGmModeEnabled()
+            autoSync: false
         };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
@@ -5447,8 +5397,7 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(displayName),
             nickname: displayName,
             avatar,
-            autoSync: sameAccount ? !!oldProfile?.autoSync : false,
-            gmMode: sameAccount ? isGmModeEnabled() : false
+            autoSync: sameAccount ? !!oldProfile?.autoSync : false
         };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
@@ -6086,562 +6035,6 @@ ${getCleanFeatType(slot.type)}`;
         if (menu) menu.classList.toggle('active', !!characterToolbarMenuOpen);
     }
 
-    const WORKSHOP_ABILITIES = [
-        { key: 'str', label: 'СИЛ' },
-        { key: 'dex', label: 'ЛОВ' },
-        { key: 'con', label: 'ТЕЛ' },
-        { key: 'int', label: 'ИНТ' },
-        { key: 'wis', label: 'МДР' },
-        { key: 'cha', label: 'ХАР' }
-    ];
-    const WORKSHOP_SAVE_CONFIGS = [
-        { key: 'perception', label: 'Внимание', stat: 'wis' },
-        { key: 'fort', label: 'Стойкость', stat: 'con' },
-        { key: 'ref', label: 'Рефлекс', stat: 'dex' },
-        { key: 'will', label: 'Воля', stat: 'wis' }
-    ];
-    const WORKSHOP_SKILL_OPTIONS = [
-        { key: 'acrobatics', label: 'Акробатика', stat: 'dex' },
-        { key: 'arcana', label: 'Мистицизм', stat: 'int' },
-        { key: 'athletics', label: 'Атлетика', stat: 'str' },
-        { key: 'crafting', label: 'Ремесло', stat: 'int' },
-        { key: 'deception', label: 'Обман', stat: 'cha' },
-        { key: 'diplomacy', label: 'Дипломатия', stat: 'cha' },
-        { key: 'intimidation', label: 'Запугивание', stat: 'cha' },
-        { key: 'medicine', label: 'Медицина', stat: 'wis' },
-        { key: 'nature', label: 'Природа', stat: 'wis' },
-        { key: 'occultism', label: 'Оккультизм', stat: 'int' },
-        { key: 'performance', label: 'Исполнение', stat: 'cha' },
-        { key: 'religion', label: 'Религия', stat: 'wis' },
-        { key: 'society', label: 'Общество', stat: 'int' },
-        { key: 'stealth', label: 'Скрытность', stat: 'dex' },
-        { key: 'survival', label: 'Выживание', stat: 'wis' },
-        { key: 'thievery', label: 'Воровство', stat: 'dex' }
-    ];
-
-    function makeWorkshopNpcId() {
-        return `npc${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    }
-
-    function makeWorkshopAttackId() {
-        return `wa${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    }
-
-    function getWorkshopDefaultAbilities() {
-        return { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
-    }
-
-    function normalizeWorkshopRank(value) {
-        return Math.max(0, Math.min(4, parseInt(value) || 0));
-    }
-
-    function normalizeWorkshopNpc(source = {}) {
-        const abilities = { ...getWorkshopDefaultAbilities(), ...(source.abilities || {}) };
-        Object.keys(abilities).forEach(key => { abilities[key] = parseInt(abilities[key]) || 0; });
-        const saves = {};
-        WORKSHOP_SAVE_CONFIGS.forEach(cfg => {
-            const current = source.saves?.[cfg.key] || source[cfg.key] || {};
-            saves[cfg.key] = {
-                stat: WORKSHOP_ABILITIES.some(a => a.key === current.stat) ? current.stat : cfg.stat,
-                prof: normalizeWorkshopRank(current.prof),
-                item: parseInt(current.item) || 0
-            };
-        });
-        const skillKeys = new Set();
-        const skills = (Array.isArray(source.skills) ? source.skills : [])
-            .map(skill => {
-                const opt = WORKSHOP_SKILL_OPTIONS.find(x => x.key === skill.key);
-                if (!opt || skillKeys.has(opt.key)) return null;
-                skillKeys.add(opt.key);
-                return {
-                    key: opt.key,
-                    label: opt.label,
-                    stat: WORKSHOP_ABILITIES.some(a => a.key === skill.stat) ? skill.stat : opt.stat,
-                    prof: normalizeWorkshopRank(skill.prof),
-                    item: parseInt(skill.item) || 0
-                };
-            })
-            .filter(Boolean);
-        const attacks = (Array.isArray(source.attacks) ? source.attacks : []).map(atk => ({
-            id: String(atk.id || makeWorkshopAttackId()),
-            name: String(atk.name || '').trim() || 'Атака',
-            hit: String(atk.hit || '+0').trim() || '+0',
-            dmg: String(atk.dmg || '1к6').replace(/d/gi, 'к').trim() || '1к6'
-        }));
-        const hpMax = Math.max(0, parseInt(source.hpMax) || 10);
-        return {
-            id: String(source.id || makeWorkshopNpcId()),
-            name: String(source.name || '').trim() || 'НПС',
-            avatar: String(source.avatar || ''),
-            level: Math.max(-1, Math.min(20, Number.isFinite(parseInt(source.level)) ? parseInt(source.level) : 0)),
-            hpCur: Math.max(0, parseInt(source.hpCur ?? hpMax) || 0),
-            hpMax,
-            ac: parseInt(source.ac) || 10,
-            abilities,
-            saves,
-            skills,
-            attacks,
-            notes: String(source.notes || '')
-        };
-    }
-
-    function loadWorkshopData() {
-        try {
-            const raw = localStorage.getItem(WORKSHOP_KEY);
-            const parsed = raw ? JSON.parse(raw) : {};
-            workshopNpcs = (Array.isArray(parsed.npcs) ? parsed.npcs : []).map(normalizeWorkshopNpc);
-            if (parsed.tab === 'initiative' || parsed.tab === 'bestiary') workshopTab = parsed.tab;
-        } catch (e) {
-            console.warn('Workshop load error', e);
-            workshopNpcs = [];
-            workshopTab = 'bestiary';
-        }
-    }
-
-    function saveWorkshopData() {
-        safeStorageSet(WORKSHOP_KEY, JSON.stringify({ tab: workshopTab, npcs: workshopNpcs.map(normalizeWorkshopNpc) }), false);
-    }
-
-    function workshopStatOptions(selected) {
-        return WORKSHOP_ABILITIES.map(ability => `<option value="${ability.key}" ${selected === ability.key ? 'selected' : ''}>${ability.label}</option>`).join('');
-    }
-
-    function workshopProfOptions(selected) {
-        const labels = ['Нет', 'Т', 'Э', 'М', 'Л'];
-        const value = normalizeWorkshopRank(selected);
-        return labels.map((label, idx) => `<option value="${idx}" ${idx === value ? 'selected' : ''}>${label}</option>`).join('');
-    }
-
-    function getWorkshopProfBonus(npc, rank) {
-        const r = normalizeWorkshopRank(rank);
-        return r > 0 ? r * 2 : 0;
-    }
-
-    function getWorkshopBonus(npc, config) {
-        const stat = WORKSHOP_ABILITIES.some(a => a.key === config?.stat) ? config.stat : 'str';
-        return (parseInt(npc.abilities?.[stat]) || 0) + getWorkshopProfBonus(npc, config?.prof) + (parseInt(config?.item) || 0);
-    }
-
-    function formatWorkshopBonus(value) {
-        const n = parseInt(value) || 0;
-        return (n >= 0 ? '+' : '') + n;
-    }
-
-    function switchWorkshopTab(tab) {
-        workshopTab = tab === 'initiative' ? 'initiative' : 'bestiary';
-        saveWorkshopData();
-        renderWorkshopPage();
-    }
-
-    function renderWorkshopPage() {
-        loadWorkshopData();
-        const bestiaryTab = document.getElementById('workshop-tab-bestiary');
-        const initiativeTab = document.getElementById('workshop-tab-initiative');
-        const bestiaryPage = document.getElementById('workshop-page-bestiary');
-        const initiativePage = document.getElementById('workshop-page-initiative');
-        const isInitiative = workshopTab === 'initiative';
-        bestiaryTab?.classList.toggle('active', !isInitiative);
-        initiativeTab?.classList.toggle('active', isInitiative);
-        bestiaryTab?.setAttribute('aria-selected', String(!isInitiative));
-        initiativeTab?.setAttribute('aria-selected', String(isInitiative));
-        bestiaryPage?.classList.toggle('active', !isInitiative);
-        initiativePage?.classList.toggle('active', isInitiative);
-        renderWorkshopBestiary();
-    }
-
-    function renderWorkshopBestiary() {
-        const list = document.getElementById('workshop-bestiary-list');
-        if (!list) return;
-        const cards = workshopNpcs.map(npc => {
-            const avatar = npc.avatar ? `<img src="${npc.avatar}" alt="">` : '<span>👹</span>';
-            const hpPct = npc.hpMax > 0 ? Math.max(0, Math.min(100, (npc.hpCur / npc.hpMax) * 100)) : 0;
-            const hpClass = hpPct <= 25 ? 'danger' : (hpPct <= 50 ? 'warn' : 'ok');
-            return `<button type="button" class="workshop-npc-card" onclick="openWorkshopNpcEditor('${npc.id}')">
-                <div class="workshop-npc-card-avatar">${avatar}</div>
-                <div class="workshop-npc-card-name">${escapeHtml(npc.name)}</div>
-                <div class="workshop-npc-card-stats"><span class="${hpClass}">${npc.hpCur}/${npc.hpMax}</span><span>КЗ ${npc.ac}</span></div>
-            </button>`;
-        }).join('');
-        list.innerHTML = cards || '<div class="workshop-empty-small">В бестиарии пока нет НПС. Нажми +, чтобы добавить первого.</div>';
-    }
-
-    function addWorkshopNpc() {
-        openWorkshopNpcEditor('');
-    }
-
-
-    function showWorkshopNpcSheet() {
-        const listView = document.getElementById('workshop-bestiary-list-view');
-        const sheet = document.getElementById('workshop-npc-sheet');
-        if (listView) listView.classList.add('hidden');
-        if (sheet) {
-            sheet.classList.add('active');
-            sheet.setAttribute('aria-hidden', 'false');
-        }
-    }
-
-    function closeWorkshopNpcSheet() {
-        const listView = document.getElementById('workshop-bestiary-list-view');
-        const sheet = document.getElementById('workshop-npc-sheet');
-        if (sheet) {
-            sheet.classList.remove('active');
-            sheet.setAttribute('aria-hidden', 'true');
-        }
-        if (listView) listView.classList.remove('hidden');
-        currentWorkshopNpcId = null;
-    }
-
-    function switchWorkshopNpcSheetPage(page = 'stats') {
-        currentWorkshopNpcSheetPage = page === 'attacks' ? 'attacks' : 'stats';
-        const statsTab = document.getElementById('workshop-sheet-tab-stats');
-        const attacksTab = document.getElementById('workshop-sheet-tab-attacks');
-        const statsPage = document.getElementById('workshop-sheet-page-stats');
-        const attacksPage = document.getElementById('workshop-sheet-page-attacks');
-        const attacksActive = currentWorkshopNpcSheetPage === 'attacks';
-        statsTab?.classList.toggle('active', !attacksActive);
-        attacksTab?.classList.toggle('active', attacksActive);
-        statsPage?.classList.toggle('active', !attacksActive);
-        attacksPage?.classList.toggle('active', attacksActive);
-    }
-
-    function getCurrentWorkshopNpcFromModal() {
-        const id = document.getElementById('workshop-npc-id')?.value || currentWorkshopNpcId || makeWorkshopNpcId();
-        const abilities = {};
-        WORKSHOP_ABILITIES.forEach(ability => {
-            abilities[ability.key] = parseInt(document.getElementById(`workshop-abi-${ability.key}`)?.value) || 0;
-        });
-        const saves = {};
-        WORKSHOP_SAVE_CONFIGS.forEach(cfg => {
-            saves[cfg.key] = {
-                stat: document.getElementById(`workshop-save-${cfg.key}-stat`)?.value || cfg.stat,
-                prof: normalizeWorkshopRank(document.getElementById(`workshop-save-${cfg.key}-prof`)?.value),
-                item: parseInt(document.getElementById(`workshop-save-${cfg.key}-item`)?.value) || 0
-            };
-        });
-        syncWorkshopAttackRowsFromDom();
-        return normalizeWorkshopNpc({
-            id,
-            name: document.getElementById('workshop-npc-name')?.value || 'НПС',
-            avatar: currentWorkshopNpcAvatar || '',
-            level: document.getElementById('workshop-npc-level')?.value || 0,
-            hpCur: document.getElementById('workshop-npc-hp-cur')?.value || 0,
-            hpMax: document.getElementById('workshop-npc-hp-max')?.value || 0,
-            ac: document.getElementById('workshop-npc-ac')?.value || 10,
-            abilities,
-            saves,
-            skills: currentWorkshopNpcSkills,
-            attacks: currentWorkshopNpcAttacks,
-            notes: document.getElementById('workshop-npc-notes')?.value || ''
-        });
-    }
-
-    function openWorkshopNpcEditor(npcId = '') {
-        loadWorkshopData();
-        const npc = npcId ? (workshopNpcs.find(x => String(x.id) === String(npcId)) || null) : null;
-        const data = normalizeWorkshopNpc(npc || { name: 'НПС' });
-        currentWorkshopNpcId = data.id;
-        currentWorkshopNpcAvatar = data.avatar || '';
-        currentWorkshopNpcSkills = data.skills.map(skill => ({ ...skill }));
-        currentWorkshopNpcAttacks = data.attacks.map(atk => ({ ...atk }));
-        const idEl = document.getElementById('workshop-npc-id');
-        const nameEl = document.getElementById('workshop-npc-name');
-        const levelEl = document.getElementById('workshop-npc-level');
-        const acEl = document.getElementById('workshop-npc-ac');
-        const hpCurEl = document.getElementById('workshop-npc-hp-cur');
-        const hpMaxEl = document.getElementById('workshop-npc-hp-max');
-        const notesEl = document.getElementById('workshop-npc-notes');
-        if (idEl) idEl.value = data.id;
-        if (nameEl) nameEl.value = data.name;
-        if (levelEl) levelEl.value = data.level;
-        if (acEl) acEl.value = data.ac;
-        if (hpCurEl) hpCurEl.value = data.hpCur;
-        if (hpMaxEl) hpMaxEl.value = data.hpMax;
-        if (notesEl) notesEl.value = data.notes || '';
-        renderWorkshopNpcAvatar();
-        renderWorkshopNpcSaves(data);
-        renderWorkshopNpcAbilities(data);
-        renderWorkshopNpcSkillsPreview(data);
-        renderWorkshopNpcAttacks();
-        switchWorkshopNpcSheetPage('stats');
-        showWorkshopNpcSheet();
-    }
-
-    function renderWorkshopNpcAvatar() {
-        const img = document.getElementById('workshop-npc-avatar-img');
-        const fallback = document.getElementById('workshop-npc-avatar-fallback');
-        if (!img || !fallback) return;
-        if (currentWorkshopNpcAvatar) {
-            img.src = currentWorkshopNpcAvatar;
-            img.style.display = 'block';
-            fallback.style.display = 'none';
-        } else {
-            img.removeAttribute('src');
-            img.style.display = 'none';
-            fallback.style.display = 'flex';
-        }
-    }
-
-    function handleWorkshopNpcAvatar(input) {
-        const file = input?.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = e => {
-            currentWorkshopNpcAvatar = String(e.target?.result || '');
-            renderWorkshopNpcAvatar();
-            input.value = '';
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function renderWorkshopNpcSaves(npc) {
-        const root = document.getElementById('workshop-npc-saves');
-        if (!root) return;
-        root.innerHTML = WORKSHOP_SAVE_CONFIGS.map(cfg => {
-            const value = npc.saves?.[cfg.key] || { stat: cfg.stat, prof: 0, item: 0 };
-            const bonus = getWorkshopBonus(npc, value);
-            return `<div class="workshop-save-row">
-                <button type="button" class="workshop-roll-pill" onclick="rollWorkshopNpcSave('${cfg.key}')"><b>${escapeHtml(cfg.label)}</b><span>${formatWorkshopBonus(bonus)}</span></button>
-                <select id="workshop-save-${cfg.key}-stat">${workshopStatOptions(value.stat)}</select>
-                <select id="workshop-save-${cfg.key}-prof">${workshopProfOptions(value.prof)}</select>
-                <input type="number" id="workshop-save-${cfg.key}-item" value="${parseInt(value.item) || 0}" title="Бонус">
-            </div>`;
-        }).join('');
-    }
-
-    function renderWorkshopNpcAbilities(npc) {
-        const root = document.getElementById('workshop-npc-abilities');
-        if (!root) return;
-        root.innerHTML = WORKSHOP_ABILITIES.map(ability => {
-            const val = parseInt(npc.abilities?.[ability.key]) || 0;
-            return `<div class="workshop-ability-cell">
-                <button type="button" onclick="rollWorkshopNpcAbility('${ability.key}')"><span>${ability.label}</span><b>${formatWorkshopBonus(val)}</b></button>
-                <input type="number" id="workshop-abi-${ability.key}" value="${val}">
-            </div>`;
-        }).join('');
-    }
-
-    function renderWorkshopNpcSkillsPreview(npc = null) {
-        const root = document.getElementById('workshop-npc-skills-preview');
-        if (!root) return;
-        const data = npc || getCurrentWorkshopNpcFromModal();
-        if (!currentWorkshopNpcSkills.length) {
-            root.innerHTML = '<div class="workshop-empty-inline">Навыки не выбраны.</div>';
-            return;
-        }
-        root.innerHTML = currentWorkshopNpcSkills.map(skill => {
-            const bonus = getWorkshopBonus(data, skill);
-            return `<button type="button" class="workshop-skill-chip" onclick="rollWorkshopNpcSkill('${skill.key}')"><span>${escapeHtml(skill.label)}</span><b>${formatWorkshopBonus(bonus)}</b></button>`;
-        }).join('');
-    }
-
-    function openWorkshopSkillsModal() {
-        const data = getCurrentWorkshopNpcFromModal();
-        const selected = new Map(currentWorkshopNpcSkills.map(skill => [skill.key, skill]));
-        const root = document.getElementById('workshop-skills-editor');
-        if (!root) return;
-        root.innerHTML = WORKSHOP_SKILL_OPTIONS.map(opt => {
-            const skill = selected.get(opt.key) || { ...opt, prof: 0, item: 0 };
-            const checked = selected.has(opt.key);
-            const bonus = checked ? getWorkshopBonus(data, skill) : getWorkshopBonus(data, { ...skill, prof: 0, item: 0 });
-            return `<label class="workshop-skill-editor-row" for="workshop-skill-${opt.key}">
-                <input type="checkbox" id="workshop-skill-${opt.key}" data-workshop-skill="${opt.key}" ${checked ? 'checked' : ''}>
-                <span class="workshop-skill-editor-name">${escapeHtml(opt.label)} <small>${formatWorkshopBonus(bonus)}</small></span>
-                <select id="workshop-skill-${opt.key}-stat" onclick="event.stopPropagation()">${workshopStatOptions(skill.stat || opt.stat)}</select>
-                <select id="workshop-skill-${opt.key}-prof" onclick="event.stopPropagation()">${workshopProfOptions(skill.prof)}</select>
-                <input type="number" id="workshop-skill-${opt.key}-item" value="${parseInt(skill.item) || 0}" onclick="event.stopPropagation()" title="Бонус">
-            </label>`;
-        }).join('');
-        openModal('workshopSkillsModal');
-    }
-
-    function saveWorkshopSkillsModal() {
-        currentWorkshopNpcSkills = WORKSHOP_SKILL_OPTIONS.map(opt => {
-            const checked = document.getElementById(`workshop-skill-${opt.key}`)?.checked;
-            if (!checked) return null;
-            return {
-                key: opt.key,
-                label: opt.label,
-                stat: document.getElementById(`workshop-skill-${opt.key}-stat`)?.value || opt.stat,
-                prof: normalizeWorkshopRank(document.getElementById(`workshop-skill-${opt.key}-prof`)?.value),
-                item: parseInt(document.getElementById(`workshop-skill-${opt.key}-item`)?.value) || 0
-            };
-        }).filter(Boolean);
-        renderWorkshopNpcSkillsPreview(getCurrentWorkshopNpcFromModal());
-        closeModal('workshopSkillsModal');
-    }
-
-    function syncWorkshopAttackRowsFromDom() {
-        currentWorkshopNpcAttacks = Array.from(document.querySelectorAll('[data-workshop-attack-id]')).map(row => {
-            const id = row.dataset.workshopAttackId || makeWorkshopAttackId();
-            return {
-                id,
-                name: row.querySelector('[data-workshop-attack-name]')?.value || 'Атака',
-                hit: row.querySelector('[data-workshop-attack-hit]')?.value || '+0',
-                dmg: (row.querySelector('[data-workshop-attack-dmg]')?.value || '1к6').replace(/d/gi, 'к')
-            };
-        });
-    }
-
-    function renderWorkshopNpcAttacks() {
-        const root = document.getElementById('workshop-npc-attacks');
-        if (!root) return;
-        root.innerHTML = currentWorkshopNpcAttacks.map(atk => `<div class="workshop-attack-row" data-workshop-attack-id="${atk.id}">
-            <input type="text" data-workshop-attack-name value="${escapeHtml(atk.name)}" placeholder="Атака">
-            <input type="text" data-workshop-attack-hit value="${escapeHtml(atk.hit)}" placeholder="+7" oninput="this.value=this.value.replace(/d/gi,'к')">
-            <input type="text" data-workshop-attack-dmg value="${escapeHtml(atk.dmg)}" placeholder="1к8+4" oninput="this.value=this.value.replace(/d/gi,'к')">
-            <button type="button" onclick="rollWorkshopNpcAttackHit('${atk.id}')">🎯</button>
-            <button type="button" onclick="rollWorkshopNpcAttackDamage('${atk.id}')">⚔</button>
-            <button type="button" class="danger" onclick="removeWorkshopNpcAttackRow('${atk.id}')">×</button>
-        </div>`).join('') || '<div class="workshop-empty-inline">Атак пока нет.</div>';
-    }
-
-    function addWorkshopNpcAttackRow() {
-        syncWorkshopAttackRowsFromDom();
-        currentWorkshopNpcAttacks.push({ id: makeWorkshopAttackId(), name: 'Атака', hit: '+0', dmg: '1к6' });
-        renderWorkshopNpcAttacks();
-    }
-
-    function removeWorkshopNpcAttackRow(id) {
-        syncWorkshopAttackRowsFromDom();
-        currentWorkshopNpcAttacks = currentWorkshopNpcAttacks.filter(atk => String(atk.id) !== String(id));
-        renderWorkshopNpcAttacks();
-    }
-
-    function saveWorkshopNpcFromModal() {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const idx = workshopNpcs.findIndex(x => String(x.id) === String(npc.id));
-        if (idx >= 0) workshopNpcs[idx] = npc;
-        else workshopNpcs.push(npc);
-        saveWorkshopData();
-        renderWorkshopBestiary();
-        closeWorkshopNpcSheet();
-    }
-
-    function deleteWorkshopNpcFromModal() {
-        const id = document.getElementById('workshop-npc-id')?.value || currentWorkshopNpcId;
-        if (!id) return;
-        workshopNpcs = workshopNpcs.filter(npc => String(npc.id) !== String(id));
-        saveWorkshopData();
-        renderWorkshopBestiary();
-        closeWorkshopNpcSheet();
-    }
-
-    function rollWorkshopNpcHp(dir) {
-        const deltaEl = document.getElementById('workshop-npc-hp-delta');
-        const curEl = document.getElementById('workshop-npc-hp-cur');
-        const maxEl = document.getElementById('workshop-npc-hp-max');
-        const delta = Math.max(0, parseInt(deltaEl?.value) || 0);
-        const max = Math.max(0, parseInt(maxEl?.value) || 0);
-        const cur = Math.max(0, parseInt(curEl?.value) || 0);
-        if (curEl) curEl.value = Math.max(0, Math.min(max || 99999, cur + delta * dir));
-        if (deltaEl) deltaEl.value = '';
-    }
-
-    function rollWorkshopNpcAbility(stat) {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const ability = WORKSHOP_ABILITIES.find(a => a.key === stat);
-        rollDice(`${npc.name}: ${ability?.label || stat}`, formatWorkshopBonus(npc.abilities?.[stat] || 0));
-    }
-
-    function rollWorkshopNpcSave(key) {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const cfg = WORKSHOP_SAVE_CONFIGS.find(x => x.key === key);
-        const bonus = getWorkshopBonus(npc, npc.saves?.[key] || cfg);
-        rollDice(`${npc.name}: ${cfg?.label || key}`, formatWorkshopBonus(bonus));
-    }
-
-    function rollWorkshopNpcSkill(key) {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const skill = currentWorkshopNpcSkills.find(x => x.key === key);
-        if (!skill) return;
-        const bonus = getWorkshopBonus(npc, skill);
-        rollDice(`${npc.name}: ${skill.label}`, formatWorkshopBonus(bonus));
-    }
-
-    function getWorkshopAttackFromDom(id) {
-        syncWorkshopAttackRowsFromDom();
-        return currentWorkshopNpcAttacks.find(atk => String(atk.id) === String(id));
-    }
-
-    function rollWorkshopNpcAttackHit(id) {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const atk = getWorkshopAttackFromDom(id);
-        if (!atk) return;
-        rollFormula(`${npc.name}: ${atk.name}`, `к20${String(atk.hit || '+0')}`, 'var(--accent)');
-    }
-
-    function rollWorkshopNpcAttackDamage(id) {
-        const npc = getCurrentWorkshopNpcFromModal();
-        const atk = getWorkshopAttackFromDom(id);
-        if (!atk) return;
-        rollFormula(`${npc.name}: ${atk.name}`, atk.dmg || '1к6', 'var(--hp-red)');
-    }
-
-    function renderCharacterMenuPage(direction = '') {
-        const gmMode = isGmModeEnabled();
-        if (!['characters', 'workshop'].includes(characterMenuPage)) characterMenuPage = 'characters';
-        if (!gmMode) characterMenuPage = 'characters';
-        const isWorkshop = gmMode && characterMenuPage === 'workshop';
-        const menu = document.getElementById('characterMenu');
-        const title = document.getElementById('character-menu-title');
-        const tabs = document.querySelector('.character-menu-tabs');
-        const charactersPage = document.getElementById('character-page-characters');
-        const workshopPage = document.getElementById('character-page-workshop');
-        const charactersTab = document.getElementById('character-menu-tab-characters');
-        const workshopTab = document.getElementById('character-menu-tab-workshop');
-        const cloudButtons = document.getElementById('cloud-action-buttons');
-
-        if (menu) {
-            menu.classList.toggle('gm-mode', gmMode);
-            menu.classList.toggle('workshop-open', isWorkshop);
-            menu.classList.remove('menu-page-next', 'menu-page-prev');
-            if (direction) {
-                void menu.offsetWidth;
-                menu.classList.add(direction === 'prev' ? 'menu-page-prev' : 'menu-page-next');
-            }
-        }
-        if (title) {
-            title.innerText = isWorkshop ? 'Мастерская' : 'Персонажи';
-            title.style.display = '';
-            title.classList.toggle('gm-title-clickable', gmMode);
-            title.setAttribute('title', gmMode ? (isWorkshop ? 'Вернуться к персонажам' : 'Открыть мастерскую') : '');
-        }
-        if (tabs) tabs.style.display = 'none';
-        if (charactersPage) charactersPage.classList.toggle('active', !isWorkshop);
-        if (workshopPage) workshopPage.classList.toggle('active', isWorkshop);
-        if (charactersTab) {
-            charactersTab.classList.toggle('active', !isWorkshop);
-            charactersTab.setAttribute('aria-selected', String(!isWorkshop));
-        }
-        if (workshopTab) {
-            workshopTab.classList.toggle('active', isWorkshop);
-            workshopTab.setAttribute('aria-selected', String(isWorkshop));
-        }
-        if (cloudButtons) cloudButtons.classList.toggle('hidden-on-workshop', isWorkshop);
-        if (isWorkshop) renderWorkshopPage();
-    }
-
-    function switchCharacterMenuPage(page, direction = '') {
-        if (!isGmModeEnabled()) page = 'characters';
-        const nextPage = page === 'workshop' ? 'workshop' : 'characters';
-        if (!direction && nextPage !== characterMenuPage) {
-            direction = nextPage === 'workshop' ? 'next' : 'prev';
-        }
-        characterMenuPage = nextPage;
-        characterMenuOpenId = null;
-        characterToolbarMenuOpen = false;
-        cloudActionMenuOpen = false;
-        renderCharacterToolbarMenu();
-        renderCloudActionMenu();
-        renderCharacterMenuPage(direction);
-    }
-
-    function handleCharacterMenuTitleClick() {
-        if (!isGmModeEnabled()) return;
-        switchCharacterMenuPage(characterMenuPage === 'workshop' ? 'characters' : 'workshop');
-    }
-
-
     function closeCharacterToolbarMenu() {
         const hadCharacterMenu = !!characterToolbarMenuOpen;
         const hadCloudMenu = !!cloudActionMenuOpen;
@@ -6773,7 +6166,6 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function renderCharacterMenu() {
-        renderCharacterMenuPage();
         const list = document.getElementById('character-list');
         const uploadBtn = document.getElementById('character-upload-btn');
         const countEl = document.getElementById('character-count');

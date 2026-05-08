@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02c">
+    <link rel="stylesheet" href="css/styles.css?v=1.02d">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -67,14 +67,31 @@
         </div>
 
         <div id="character-page-workshop" class="character-menu-page workshop-page" role="tabpanel" aria-labelledby="character-menu-tab-workshop">
-            <div class="workshop-empty-card">
-                <div class="workshop-empty-icon">⚙️</div>
-                <div class="workshop-empty-title">Мастерская пока пустая</div>
-                <div class="workshop-empty-text">Позже здесь можно будет добавить НПС, инициативу боя и локальные инструменты мастера.</div>
+            <div class="workshop-shell">
+                <div class="workshop-tabs" role="tablist" aria-label="Мастерская">
+                    <button type="button" id="workshop-tab-bestiary" class="workshop-tab active" onclick="switchWorkshopTab('bestiary')" role="tab" aria-selected="true">Бестиарий</button>
+                    <button type="button" id="workshop-tab-initiative" class="workshop-tab" onclick="switchWorkshopTab('initiative')" role="tab" aria-selected="false">Инициатива</button>
+                </div>
+
+                <div id="workshop-page-bestiary" class="workshop-subpage active" role="tabpanel" aria-labelledby="workshop-tab-bestiary">
+                    <div class="workshop-toolbar">
+                        <div class="workshop-toolbar-title">Бестиарий</div>
+                        <button type="button" class="workshop-add-btn" onclick="addWorkshopNpc()" title="Добавить НПС">+</button>
+                    </div>
+                    <div id="workshop-bestiary-list" class="workshop-bestiary-grid"></div>
+                </div>
+
+                <div id="workshop-page-initiative" class="workshop-subpage" role="tabpanel" aria-labelledby="workshop-tab-initiative">
+                    <div class="workshop-empty-card compact">
+                        <div class="workshop-empty-icon">⚔️</div>
+                        <div class="workshop-empty-title">Инициатива</div>
+                        <div class="workshop-empty-text">Здесь позже будет очередь боя, НПС и участники сцены. Пока вкладка пустая.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="app-version-mark">IntListPC v1.02c<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.02d<br>by RubiDus</div>
     </div>
 </div>
 
@@ -1023,7 +1040,72 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.02c"></script>
+
+<div id="workshopNpcModal" class="modal"><div class="modal-content workshop-npc-modal">
+    <h3 id="workshop-npc-modal-title">НПС</h3>
+    <input type="hidden" id="workshop-npc-id">
+
+    <div class="workshop-npc-head">
+        <button type="button" class="workshop-npc-avatar-edit" onclick="document.getElementById('workshopNpcAvatarInput').click()" title="Аватар НПС">
+            <img id="workshop-npc-avatar-img" src="" alt="">
+            <span id="workshop-npc-avatar-fallback">👹</span>
+        </button>
+        <div class="workshop-npc-main-fields">
+            <label class="l">Имя</label>
+            <input type="text" id="workshop-npc-name" placeholder="НПС">
+            <div class="workshop-npc-tiny-grid">
+                <div><label class="l">Ур.</label><input type="number" id="workshop-npc-level" min="0" max="25" value="1"></div>
+                <div><label class="l">КЗ</label><input type="number" id="workshop-npc-ac" value="10"></div>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="workshopNpcAvatarInput" style="display:none" onchange="handleWorkshopNpcAvatar(this)" accept="image/*">
+
+    <div class="workshop-npc-hp-grid">
+        <div><label class="l">Хиты</label><input type="number" id="workshop-npc-hp-cur" value="10"></div>
+        <div><label class="l">Макс.</label><input type="number" id="workshop-npc-hp-max" value="10"></div>
+        <button type="button" class="workshop-mini-roll" onclick="rollWorkshopNpcHp(-1)">Урон</button>
+        <button type="button" class="workshop-mini-roll heal" onclick="rollWorkshopNpcHp(1)">Лечение</button>
+    </div>
+    <input type="number" id="workshop-npc-hp-delta" class="workshop-hp-delta" placeholder="число">
+
+    <div class="workshop-section-title">Внимание и спасброски</div>
+    <div id="workshop-npc-saves" class="workshop-save-grid"></div>
+
+    <div class="workshop-section-title">Характеристики</div>
+    <div id="workshop-npc-abilities" class="workshop-ability-grid"></div>
+
+    <div class="workshop-section-title split">
+        <span>Навыки</span>
+        <button type="button" class="workshop-small-btn" onclick="openWorkshopSkillsModal()">Настроить</button>
+    </div>
+    <div id="workshop-npc-skills-preview" class="workshop-skills-preview"></div>
+
+    <div class="workshop-section-title split">
+        <span>Атаки</span>
+        <button type="button" class="workshop-small-btn" onclick="addWorkshopNpcAttackRow()">+</button>
+    </div>
+    <div id="workshop-npc-attacks" class="workshop-attack-editor"></div>
+
+    <div class="workshop-section-title">Заметки</div>
+    <textarea id="workshop-npc-notes" class="workshop-npc-notes" maxlength="4000" placeholder="Тактика, особенности, добыча..."></textarea>
+
+    <div class="workshop-modal-actions">
+        <button type="button" onclick="saveWorkshopNpcFromModal()" class="btn-primary">СОХРАНИТЬ</button>
+        <button type="button" onclick="deleteWorkshopNpcFromModal()" class="btn-sec workshop-danger-btn">УДАЛИТЬ</button>
+        <button type="button" onclick="closeModal('workshopNpcModal')" class="btn-sec">ЗАКРЫТЬ</button>
+    </div>
+</div></div>
+
+<div id="workshopSkillsModal" class="modal"><div class="modal-content workshop-skills-modal">
+    <h3>Навыки НПС</h3>
+    <div class="feat-view-meta">Отметь навыки, которые будут отображаться в карточке НПС. Бонус считается от характеристики, уровня, владения и бонуса.</div>
+    <div id="workshop-skills-editor" class="workshop-skills-editor"></div>
+    <button type="button" onclick="saveWorkshopSkillsModal()" class="btn-primary">ГОТОВО</button>
+    <button type="button" onclick="closeModal('workshopSkillsModal')" class="btn-sec">ОТМЕНА</button>
+</div></div>
+
+<script src="js/app.js?v=1.02d"></script>
 
 <div class="footer-spacer"></div>
 </body>

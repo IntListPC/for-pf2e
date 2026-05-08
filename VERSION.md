@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.02c`
+Current version: `1.02d`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 
@@ -29,3 +29,6 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 
 
 `1.02c` - Reworked GM navigation: the main menu title is visible again and becomes the page switcher when GM mode is enabled; the tab buttons are hidden, mobile swipes switch between Characters and Workshop, and page changes now animate.
+
+
+`1.02d` - Workshop now has Bestiary and Initiative tabs. Bestiary supports local NPC cards with avatar, name, HP, AC, perception/saves, ability modifiers, selectable skills with proficiency-based rolls, attacks, and notes.

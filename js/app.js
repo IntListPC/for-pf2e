@@ -5,6 +5,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const MAX_CHARACTERS = 10;
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
+    const GM_MODE_KEY = 'intlistpc_gm_mode_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
@@ -5157,7 +5158,8 @@ ${getCleanFeatType(slot.type)}`;
                 id: profile.id || hashAccountToUuid(nickname),
                 nickname,
                 avatar: profile.avatar || '',
-                autoSync: !!profile.autoSync
+                autoSync: !!profile.autoSync,
+                gmMode: !!profile.gmMode
             };
         } catch (e) {
             console.warn('Account profile read error', e);
@@ -5174,8 +5176,33 @@ ${getCleanFeatType(slot.type)}`;
             id: profile.id || hashAccountToUuid(profile.nickname),
             nickname: normalizeAccountNickname(profile.nickname),
             avatar: profile.avatar || '',
-            autoSync: !!profile.autoSync
+            autoSync: !!profile.autoSync,
+            gmMode: !!profile.gmMode
         }), false);
+    }
+
+    function isGmModeEnabled() {
+        const profile = cloudUser || readAccountProfile();
+        if (profile && typeof profile.gmMode === 'boolean') return !!profile.gmMode;
+        return localStorage.getItem(GM_MODE_KEY) === '1';
+    }
+
+    function writeGmMode(enabled) {
+        const value = !!enabled;
+        safeStorageSet(GM_MODE_KEY, value ? '1' : '0', false);
+        const profile = cloudUser || readAccountProfile();
+        if (profile) {
+            profile.gmMode = value;
+            cloudUser = profile;
+            writeAccountProfile(profile);
+        }
+    }
+
+    function toggleGmMode(enabled) {
+        writeGmMode(!!enabled);
+        if (!isGmModeEnabled()) characterMenuPage = 'characters';
+        updateAccountUI();
+        renderCharacterMenuPage();
     }
 
     function getDefaultProfileIcon() {
@@ -5304,6 +5331,7 @@ ${getCleanFeatType(slot.type)}`;
         const actions = document.getElementById('cloud-action-buttons');
         const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
         const autoSyncWrap = document.getElementById('account-auto-sync-wrap');
+        const gmModeToggle = document.getElementById('account-gm-mode-toggle');
         const menuActions = document.getElementById('account-menu-actions');
         const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
@@ -5316,8 +5344,10 @@ ${getCleanFeatType(slot.type)}`;
             autoSyncToggle.disabled = !loggedIn;
         }
         if (autoSyncWrap) autoSyncWrap.style.display = loggedIn ? 'flex' : 'none';
+        if (gmModeToggle) gmModeToggle.checked = isGmModeEnabled();
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
+        renderCharacterMenuPage();
         updateAccountSummary(message);
     }
 
@@ -5362,7 +5392,8 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(nickname),
             nickname,
             avatar: previous?.avatar || '',
-            autoSync: false
+            autoSync: false,
+            gmMode: isGmModeEnabled()
         };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
@@ -5398,7 +5429,8 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(displayName),
             nickname: displayName,
             avatar,
-            autoSync: sameAccount ? !!oldProfile?.autoSync : false
+            autoSync: sameAccount ? !!oldProfile?.autoSync : false,
+            gmMode: sameAccount ? isGmModeEnabled() : false
         };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
@@ -6036,16 +6068,25 @@ ${getCleanFeatType(slot.type)}`;
         if (menu) menu.classList.toggle('active', !!characterToolbarMenuOpen);
     }
     function renderCharacterMenuPage() {
+        const gmMode = isGmModeEnabled();
         if (!['characters', 'workshop'].includes(characterMenuPage)) characterMenuPage = 'characters';
-        const isWorkshop = characterMenuPage === 'workshop';
+        if (!gmMode) characterMenuPage = 'characters';
+        const isWorkshop = gmMode && characterMenuPage === 'workshop';
+        const menu = document.getElementById('characterMenu');
         const title = document.getElementById('character-menu-title');
+        const tabs = document.querySelector('.character-menu-tabs');
         const charactersPage = document.getElementById('character-page-characters');
         const workshopPage = document.getElementById('character-page-workshop');
         const charactersTab = document.getElementById('character-menu-tab-characters');
         const workshopTab = document.getElementById('character-menu-tab-workshop');
         const cloudButtons = document.getElementById('cloud-action-buttons');
 
-        if (title) title.innerText = isWorkshop ? 'Мастерская' : 'Персонажи';
+        if (menu) menu.classList.toggle('gm-mode', gmMode);
+        if (title) {
+            title.innerText = 'Персонажи';
+            title.style.display = gmMode ? 'none' : '';
+        }
+        if (tabs) tabs.style.display = gmMode ? '' : 'none';
         if (charactersPage) charactersPage.classList.toggle('active', !isWorkshop);
         if (workshopPage) workshopPage.classList.toggle('active', isWorkshop);
         if (charactersTab) {
@@ -6060,6 +6101,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function switchCharacterMenuPage(page) {
+        if (!isGmModeEnabled()) page = 'characters';
         characterMenuPage = page === 'workshop' ? 'workshop' : 'characters';
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;

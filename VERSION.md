@@ -1,6 +1,6 @@
 # IntListPC Version Notes
 
-Current version: `1.02a`
+Current version: `1.02b`
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 
@@ -22,3 +22,7 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 `1.01k` - Cloud save/load controls were combined into one stable cloud button with a dropdown menu; arrows animate only for the selected cloud direction and disappear afterward.
 
 `1.02` - After cloud save, the current account is forced back into local storage; cloud load now syncs the visible sheet to the newly loaded active character before returning to the menu, preventing old DOM state from overwriting a loaded character after refresh.
+
+`1.02a` - Main menu gained Characters/Workshop pages for future GM tools; workshop remains local-only.
+
+`1.02b` - Added a local GM checkbox in the account/profile menu. When GM mode is off, the main menu shows the old single “Персонажи” title; when it is on, the title is hidden and the Персонажи/Мастерская tabs are shown.

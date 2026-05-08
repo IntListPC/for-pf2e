@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02a">
+    <link rel="stylesheet" href="css/styles.css?v=1.02b">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -74,7 +74,7 @@
             </div>
         </div>
 
-        <div class="app-version-mark">IntListPC v1.02a<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.02b<br>by RubiDus</div>
     </div>
 </div>
 
@@ -89,6 +89,11 @@
         <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
             <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
             <span><b>Автосинхронизация</b></span>
+        </label>
+
+        <label id="account-gm-mode-wrap" class="account-sync-toggle account-gm-toggle" for="account-gm-mode-toggle">
+            <input type="checkbox" id="account-gm-mode-toggle" onchange="toggleGmMode(this.checked)">
+            <span><b>ГМ</b></span>
         </label>
 
         <div id="account-menu-actions" class="account-menu-actions">
@@ -1018,7 +1023,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.02a"></script>
+<script src="js/app.js?v=1.02b"></script>
 
 <div class="footer-spacer"></div>
 </body>

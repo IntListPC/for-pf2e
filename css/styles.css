@@ -1386,3 +1386,26 @@ body.cloud-busy::after {
     .workshop-empty-title { font-size: 18px; }
     .workshop-empty-text { font-size: 12px; }
 }
+
+/* 1.02b: GM mode toggle for Workshop */
+#characterMenu.gm-mode .character-menu-header {
+    grid-template-rows: 64px;
+    min-height: 64px;
+    margin-bottom: 12px;
+}
+#characterMenu.gm-mode .character-menu-title {
+    display: none !important;
+}
+#characterMenu:not(.gm-mode) .character-menu-tabs {
+    display: none;
+}
+.account-gm-toggle {
+    margin-top: 8px;
+}
+@media (max-width: 599px) {
+    #characterMenu.gm-mode .character-menu-header {
+        grid-template-rows: 58px;
+        min-height: 58px;
+        margin-bottom: 12px;
+    }
+}

@@ -27,6 +27,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let currentWorkshopNpcAvatar = '';
     let currentWorkshopNpcSkills = [];
     let currentWorkshopNpcAttacks = [];
+    let currentWorkshopNpcSheetPage = 'stats';
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -6172,7 +6173,7 @@ ${getCleanFeatType(slot.type)}`;
             id: String(source.id || makeWorkshopNpcId()),
             name: String(source.name || '').trim() || 'НПС',
             avatar: String(source.avatar || ''),
-            level: Math.max(0, Math.min(25, parseInt(source.level) || 1)),
+            level: Math.max(-1, Math.min(20, Number.isFinite(parseInt(source.level)) ? parseInt(source.level) : 0)),
             hpCur: Math.max(0, parseInt(source.hpCur ?? hpMax) || 0),
             hpMax,
             ac: parseInt(source.ac) || 10,
@@ -6213,7 +6214,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function getWorkshopProfBonus(npc, rank) {
         const r = normalizeWorkshopRank(rank);
-        return r > 0 ? (Math.max(0, parseInt(npc.level) || 0) + r * 2) : 0;
+        return r > 0 ? r * 2 : 0;
     }
 
     function getWorkshopBonus(npc, config) {
@@ -6268,6 +6269,41 @@ ${getCleanFeatType(slot.type)}`;
         openWorkshopNpcEditor('');
     }
 
+
+    function showWorkshopNpcSheet() {
+        const listView = document.getElementById('workshop-bestiary-list-view');
+        const sheet = document.getElementById('workshop-npc-sheet');
+        if (listView) listView.classList.add('hidden');
+        if (sheet) {
+            sheet.classList.add('active');
+            sheet.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function closeWorkshopNpcSheet() {
+        const listView = document.getElementById('workshop-bestiary-list-view');
+        const sheet = document.getElementById('workshop-npc-sheet');
+        if (sheet) {
+            sheet.classList.remove('active');
+            sheet.setAttribute('aria-hidden', 'true');
+        }
+        if (listView) listView.classList.remove('hidden');
+        currentWorkshopNpcId = null;
+    }
+
+    function switchWorkshopNpcSheetPage(page = 'stats') {
+        currentWorkshopNpcSheetPage = page === 'attacks' ? 'attacks' : 'stats';
+        const statsTab = document.getElementById('workshop-sheet-tab-stats');
+        const attacksTab = document.getElementById('workshop-sheet-tab-attacks');
+        const statsPage = document.getElementById('workshop-sheet-page-stats');
+        const attacksPage = document.getElementById('workshop-sheet-page-attacks');
+        const attacksActive = currentWorkshopNpcSheetPage === 'attacks';
+        statsTab?.classList.toggle('active', !attacksActive);
+        attacksTab?.classList.toggle('active', attacksActive);
+        statsPage?.classList.toggle('active', !attacksActive);
+        attacksPage?.classList.toggle('active', attacksActive);
+    }
+
     function getCurrentWorkshopNpcFromModal() {
         const id = document.getElementById('workshop-npc-id')?.value || currentWorkshopNpcId || makeWorkshopNpcId();
         const abilities = {};
@@ -6287,7 +6323,7 @@ ${getCleanFeatType(slot.type)}`;
             id,
             name: document.getElementById('workshop-npc-name')?.value || 'НПС',
             avatar: currentWorkshopNpcAvatar || '',
-            level: document.getElementById('workshop-npc-level')?.value || 1,
+            level: document.getElementById('workshop-npc-level')?.value || 0,
             hpCur: document.getElementById('workshop-npc-hp-cur')?.value || 0,
             hpMax: document.getElementById('workshop-npc-hp-max')?.value || 0,
             ac: document.getElementById('workshop-npc-ac')?.value || 10,
@@ -6307,20 +6343,27 @@ ${getCleanFeatType(slot.type)}`;
         currentWorkshopNpcAvatar = data.avatar || '';
         currentWorkshopNpcSkills = data.skills.map(skill => ({ ...skill }));
         currentWorkshopNpcAttacks = data.attacks.map(atk => ({ ...atk }));
-        document.getElementById('workshop-npc-modal-title').innerText = npc ? 'НПС' : 'Новый НПС';
-        document.getElementById('workshop-npc-id').value = data.id;
-        document.getElementById('workshop-npc-name').value = data.name;
-        document.getElementById('workshop-npc-level').value = data.level;
-        document.getElementById('workshop-npc-ac').value = data.ac;
-        document.getElementById('workshop-npc-hp-cur').value = data.hpCur;
-        document.getElementById('workshop-npc-hp-max').value = data.hpMax;
-        document.getElementById('workshop-npc-notes').value = data.notes || '';
+        const idEl = document.getElementById('workshop-npc-id');
+        const nameEl = document.getElementById('workshop-npc-name');
+        const levelEl = document.getElementById('workshop-npc-level');
+        const acEl = document.getElementById('workshop-npc-ac');
+        const hpCurEl = document.getElementById('workshop-npc-hp-cur');
+        const hpMaxEl = document.getElementById('workshop-npc-hp-max');
+        const notesEl = document.getElementById('workshop-npc-notes');
+        if (idEl) idEl.value = data.id;
+        if (nameEl) nameEl.value = data.name;
+        if (levelEl) levelEl.value = data.level;
+        if (acEl) acEl.value = data.ac;
+        if (hpCurEl) hpCurEl.value = data.hpCur;
+        if (hpMaxEl) hpMaxEl.value = data.hpMax;
+        if (notesEl) notesEl.value = data.notes || '';
         renderWorkshopNpcAvatar();
         renderWorkshopNpcSaves(data);
         renderWorkshopNpcAbilities(data);
         renderWorkshopNpcSkillsPreview(data);
         renderWorkshopNpcAttacks();
-        openModal('workshopNpcModal');
+        switchWorkshopNpcSheetPage('stats');
+        showWorkshopNpcSheet();
     }
 
     function renderWorkshopNpcAvatar() {
@@ -6471,7 +6514,7 @@ ${getCleanFeatType(slot.type)}`;
         else workshopNpcs.push(npc);
         saveWorkshopData();
         renderWorkshopBestiary();
-        closeModal('workshopNpcModal');
+        closeWorkshopNpcSheet();
     }
 
     function deleteWorkshopNpcFromModal() {
@@ -6480,7 +6523,7 @@ ${getCleanFeatType(slot.type)}`;
         workshopNpcs = workshopNpcs.filter(npc => String(npc.id) !== String(id));
         saveWorkshopData();
         renderWorkshopBestiary();
-        closeModal('workshopNpcModal');
+        closeWorkshopNpcSheet();
     }
 
     function rollWorkshopNpcHp(dir) {

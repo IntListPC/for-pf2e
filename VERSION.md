@@ -32,3 +32,5 @@ Previous line: `1.01b` - Account cloud status now appears under the account name
 
 
 `1.02d` - Workshop now has Bestiary and Initiative tabs. Bestiary supports local NPC cards with avatar, name, HP, AC, perception/saves, ability modifiers, selectable skills with proficiency-based rolls, attacks, and notes.
+
+`1.02e` - Мастерская: НПС теперь открываются полноценным локальным листом с вкладками Характеристики/Атаки, уровень -1..20 не влияет на бонусы.

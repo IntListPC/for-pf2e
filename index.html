@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02b">
+    <link rel="stylesheet" href="css/styles.css?v=1.02c">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -41,7 +41,7 @@
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
-            <h1 id="character-menu-title" class="character-menu-title">Персонажи</h1>
+            <h1 id="character-menu-title" class="character-menu-title" onclick="handleCharacterMenuTitleClick()" title="Переключить страницу">Персонажи</h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
                 <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
                 <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
@@ -74,7 +74,7 @@
             </div>
         </div>
 
-        <div class="app-version-mark">IntListPC v1.02b<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.02c<br>by RubiDus</div>
     </div>
 </div>
 
@@ -1023,7 +1023,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.02b"></script>
+<script src="js/app.js?v=1.02c"></script>
 
 <div class="footer-spacer"></div>
 </body>

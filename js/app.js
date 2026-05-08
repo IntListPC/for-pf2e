@@ -159,13 +159,23 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     }
 
     function handleSwipe() {
-        if (isPageSwipeBlockedTarget(touchStartTarget)) return;
         const dx = touchEndX - touchStartX;
         const dy = touchEndY - touchStartY;
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
-        const threshold = Math.max(115, window.innerWidth * 0.28);
         const elapsed = Date.now() - touchStartAt;
+
+        if (document.body.classList.contains('main-menu-open') && isGmModeEnabled() && touchStartTarget?.closest?.('#characterMenu')) {
+            if (isPageSwipeBlockedTarget(touchStartTarget)) return;
+            const menuThreshold = Math.max(86, window.innerWidth * 0.22);
+            if (elapsed > 900 || absX < menuThreshold || absX < absY * 1.45) return;
+            if (dx < 0) switchCharacterMenuPage('workshop', 'next');
+            if (dx > 0) switchCharacterMenuPage('characters', 'prev');
+            return;
+        }
+
+        if (isPageSwipeBlockedTarget(touchStartTarget)) return;
+        const threshold = Math.max(115, window.innerWidth * 0.28);
         if (elapsed > 800 || absX < threshold || absX < absY * 1.65) return;
         if (dx < 0) switchPage(currentPage + 1);
         if (dx > 0) switchPage(currentPage - 1);
@@ -6067,7 +6077,7 @@ ${getCleanFeatType(slot.type)}`;
         const menu = document.getElementById('character-toolbar-menu');
         if (menu) menu.classList.toggle('active', !!characterToolbarMenuOpen);
     }
-    function renderCharacterMenuPage() {
+    function renderCharacterMenuPage(direction = '') {
         const gmMode = isGmModeEnabled();
         if (!['characters', 'workshop'].includes(characterMenuPage)) characterMenuPage = 'characters';
         if (!gmMode) characterMenuPage = 'characters';
@@ -6081,12 +6091,22 @@ ${getCleanFeatType(slot.type)}`;
         const workshopTab = document.getElementById('character-menu-tab-workshop');
         const cloudButtons = document.getElementById('cloud-action-buttons');
 
-        if (menu) menu.classList.toggle('gm-mode', gmMode);
-        if (title) {
-            title.innerText = 'Персонажи';
-            title.style.display = gmMode ? 'none' : '';
+        if (menu) {
+            menu.classList.toggle('gm-mode', gmMode);
+            menu.classList.toggle('workshop-open', isWorkshop);
+            menu.classList.remove('menu-page-next', 'menu-page-prev');
+            if (direction) {
+                void menu.offsetWidth;
+                menu.classList.add(direction === 'prev' ? 'menu-page-prev' : 'menu-page-next');
+            }
         }
-        if (tabs) tabs.style.display = gmMode ? '' : 'none';
+        if (title) {
+            title.innerText = isWorkshop ? 'Мастерская' : 'Персонажи';
+            title.style.display = '';
+            title.classList.toggle('gm-title-clickable', gmMode);
+            title.setAttribute('title', gmMode ? (isWorkshop ? 'Вернуться к персонажам' : 'Открыть мастерскую') : '');
+        }
+        if (tabs) tabs.style.display = 'none';
         if (charactersPage) charactersPage.classList.toggle('active', !isWorkshop);
         if (workshopPage) workshopPage.classList.toggle('active', isWorkshop);
         if (charactersTab) {
@@ -6100,15 +6120,24 @@ ${getCleanFeatType(slot.type)}`;
         if (cloudButtons) cloudButtons.classList.toggle('hidden-on-workshop', isWorkshop);
     }
 
-    function switchCharacterMenuPage(page) {
+    function switchCharacterMenuPage(page, direction = '') {
         if (!isGmModeEnabled()) page = 'characters';
-        characterMenuPage = page === 'workshop' ? 'workshop' : 'characters';
+        const nextPage = page === 'workshop' ? 'workshop' : 'characters';
+        if (!direction && nextPage !== characterMenuPage) {
+            direction = nextPage === 'workshop' ? 'next' : 'prev';
+        }
+        characterMenuPage = nextPage;
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
         cloudActionMenuOpen = false;
         renderCharacterToolbarMenu();
         renderCloudActionMenu();
-        renderCharacterMenuPage();
+        renderCharacterMenuPage(direction);
+    }
+
+    function handleCharacterMenuTitleClick() {
+        if (!isGmModeEnabled()) return;
+        switchCharacterMenuPage(characterMenuPage === 'workshop' ? 'characters' : 'workshop');
     }
 
 

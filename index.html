@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.02">
+    <link rel="stylesheet" href="css/styles.css?v=1.03a">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -41,7 +41,11 @@
                     <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
-            <h1 class="character-menu-title">Персонажи</h1>
+            <h1 class="character-menu-title">
+                <button type="button" id="character-scope-prev" class="character-scope-arrow" onclick="toggleCharacterScopeFromHeader(event)" title="Персонажи" aria-label="Персонажи">‹</button>
+                <span id="character-menu-title-text">Персонажи</span>
+                <button type="button" id="character-scope-next" class="character-scope-arrow" onclick="toggleCharacterScopeFromHeader(event)" title="Мастерская" aria-label="Мастерская">›</button>
+            </h1>
             <div id="cloud-action-buttons" class="cloud-action-buttons">
                 <button type="button" id="cloud-menu-btn" class="cloud-action-btn cloud-menu-btn" onclick="toggleCloudActionMenu(event)" title="Облако" aria-label="Облако"><span class="cloud-icon" aria-hidden="true">☁️</span><span class="cloud-arrow" aria-hidden="true"></span></button>
                 <div id="cloud-action-menu" class="character-context-menu cloud-action-menu" onclick="event.stopPropagation()">
@@ -57,8 +61,13 @@
                 <button type="button" id="character-upload-btn" class="btn-sec character-menu-icon-btn" onclick="handleCharacterToolbarUploadClick(event)" title="Меню JSON" aria-label="Меню JSON"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M5 20h14"></path></svg></button><div id="character-toolbar-menu" class="character-context-menu character-toolbar-menu" onclick="event.stopPropagation()"><button type="button" onclick="startImportCharacterAsNew(event)">Загрузить</button><button type="button" onclick="exportAllCharactersJSON(event)">Сохранить</button></div>
             </div>
         </div>
+        <div id="workshop-tabs" class="workshop-tabs">
+            <button type="button" id="workshop-tab-bestiary" class="workshop-tab-btn active" onclick="switchWorkshopTab('bestiary', event)">Бестиарий</button>
+            <button type="button" id="workshop-tab-battle" class="workshop-tab-btn" onclick="switchWorkshopTab('battle', event)">Битва</button>
+        </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
-        <div class="app-version-mark">IntListPC v1.02<br>by RubiDus</div>
+        <div id="workshop-battle-view" class="workshop-battle-view"></div>
+        <div class="app-version-mark">IntListPC v1.03a<br>by RubiDus</div>
     </div>
 </div>
 
@@ -73,6 +82,10 @@
         <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
             <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
             <span><b>Автосинхронизация</b></span>
+        </label>
+        <label id="account-workshop-wrap" class="account-sync-toggle account-workshop-toggle" for="account-workshop-toggle">
+            <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
+            <span><b>Мастерская</b></span>
         </label>
 
         <div id="account-menu-actions" class="account-menu-actions">
@@ -116,7 +129,7 @@
             <div class="header-main-row">
                 <div class="avatar-box" onclick="openModal('avatarMenuModal')">
                     <img id="avatar-img" src="">
-                    <span id="avatar-plus">👤</span>
+                    <span id="avatar-plus" class="avatar-silhouette"></span>
                 </div>
                 
                 <div class="header-info" onclick="openModal('profileModal')">
@@ -201,12 +214,16 @@
             <div class="page" id="page-0">
                 <div class="content-padding" id="combat-page-content">
                     <div class="saves-block">
-                        <div class="save-card"><b>СТОЙКОСТЬ</b><div class="save-btn v" onclick="rollDice('Стойкость', this.innerText)" id="val-fort">+0</div><div class="dot-container" data-save="fort" style="justify-content:center"><div class="dot" onclick="setSaveProf('fort', 1)"></div><div class="dot" onclick="setSaveProf('fort', 2)"></div><div class="dot" onclick="setSaveProf('fort', 3)"></div><div class="dot" onclick="setSaveProf('fort', 4)"></div></div></div>
-                        <div class="save-card"><b>РЕФЛЕКС</b><div class="save-btn v" onclick="rollDice('Рефлекс', this.innerText)" id="val-ref">+0</div><div class="dot-container" data-save="ref" style="justify-content:center"><div class="dot" onclick="setSaveProf('ref', 1)"></div><div class="dot" onclick="setSaveProf('ref', 2)"></div><div class="dot" onclick="setSaveProf('ref', 3)"></div><div class="dot" onclick="setSaveProf('ref', 4)"></div></div></div>
-                        <div class="save-card"><b>ВОЛЯ</b><div class="save-btn v" onclick="rollDice('Воля', this.innerText)" id="val-will">+0</div><div class="dot-container" data-save="will" style="justify-content:center"><div class="dot" onclick="setSaveProf('will', 1)"></div><div class="dot" onclick="setSaveProf('will', 2)"></div><div class="dot" onclick="setSaveProf('will', 3)"></div><div class="dot" onclick="setSaveProf('will', 4)"></div></div></div>
-                        <div class="save-card"><b>ВНИМАНИЕ</b><div class="save-btn v" onclick="rollDice('Внимание', this.innerText)" id="val-perc">+0</div><div class="dot-container" data-save="perc" style="justify-content:center"><div class="dot" onclick="setSaveProf('perc', 1)"></div><div class="dot" onclick="setSaveProf('perc', 2)"></div><div class="dot" onclick="setSaveProf('perc', 3)"></div><div class="dot" onclick="setSaveProf('perc', 4)"></div></div></div>
+                        <div class="save-card"><b onclick="openSaveBonusModal('fort', 'Стойкость')">СТОЙКОСТЬ</b><div class="save-btn v" onclick="rollDice('Стойкость', this.innerText)" id="val-fort">+0</div><div class="dot-container" data-save="fort" style="justify-content:center"><div class="dot" onclick="setSaveProf('fort', 1)"></div><div class="dot" onclick="setSaveProf('fort', 2)"></div><div class="dot" onclick="setSaveProf('fort', 3)"></div><div class="dot" onclick="setSaveProf('fort', 4)"></div></div></div>
+                        <div class="save-card"><b onclick="openSaveBonusModal('ref', 'Рефлекс')">РЕФЛЕКС</b><div class="save-btn v" onclick="rollDice('Рефлекс', this.innerText)" id="val-ref">+0</div><div class="dot-container" data-save="ref" style="justify-content:center"><div class="dot" onclick="setSaveProf('ref', 1)"></div><div class="dot" onclick="setSaveProf('ref', 2)"></div><div class="dot" onclick="setSaveProf('ref', 3)"></div><div class="dot" onclick="setSaveProf('ref', 4)"></div></div></div>
+                        <div class="save-card"><b onclick="openSaveBonusModal('will', 'Воля')">ВОЛЯ</b><div class="save-btn v" onclick="rollDice('Воля', this.innerText)" id="val-will">+0</div><div class="dot-container" data-save="will" style="justify-content:center"><div class="dot" onclick="setSaveProf('will', 1)"></div><div class="dot" onclick="setSaveProf('will', 2)"></div><div class="dot" onclick="setSaveProf('will', 3)"></div><div class="dot" onclick="setSaveProf('will', 4)"></div></div></div>
+                        <div class="save-card"><b onclick="openSaveBonusModal('perc', 'Внимание')">ВНИМАНИЕ</b><div class="save-btn v" onclick="rollDice('Внимание', this.innerText)" id="val-perc">+0</div><div class="dot-container" data-save="perc" style="justify-content:center"><div class="dot" onclick="setSaveProf('perc', 1)"></div><div class="dot" onclick="setSaveProf('perc', 2)"></div><div class="dot" onclick="setSaveProf('perc', 3)"></div><div class="dot" onclick="setSaveProf('perc', 4)"></div></div></div>
                     </div>
                     <div id="attr-list" class="attr-grid"></div>
+                    <div id="workshop-skills-strip" class="workshop-skills-strip">
+                        <div class="workshop-skills-title" onclick="openWorkshopSkillsModal()">Навыки</div>
+                        <div id="workshop-skills-list" class="workshop-skills-list"></div>
+                    </div>
                 </div>
             </div>
 
@@ -284,7 +301,7 @@
                         <div class="personality-hero">
                             <div class="personality-portrait" onclick="openModal('avatarMenuModal')" title="Портрет персонажа">
                                 <img id="personality-portrait-img" src="" alt="">
-                                <span id="personality-portrait-fallback">👤</span>
+                                <span id="personality-portrait-fallback" class="avatar-silhouette"></span>
                             </div>
                             <div id="personality-profile-name" class="personality-profile-name">Герой</div>
                             <div id="personality-profile-meta" class="personality-profile-meta">Народ — Класс</div>
@@ -832,6 +849,18 @@
 
 <div id="sheetSettingsModal" class="modal"><div class="modal-content">
     <h3>Настройки листа</h3>
+    <label id="workshop-show-feats-wrap" class="equipment-inline-toggle avatar-menu-toggle" for="workshop-show-feats">
+        <input type="checkbox" id="workshop-show-feats" onchange="toggleSheetSettings()">
+        <span>Показывать фиты</span>
+    </label>
+    <label id="workshop-show-personality-wrap" class="equipment-inline-toggle avatar-menu-toggle" for="workshop-show-personality">
+        <input type="checkbox" id="workshop-show-personality" onchange="toggleSheetSettings()">
+        <span>Показывать личность</span>
+    </label>
+    <label id="workshop-show-equipment-wrap" class="equipment-inline-toggle avatar-menu-toggle" for="workshop-show-equipment">
+        <input type="checkbox" id="workshop-show-equipment" onchange="toggleSheetSettings()">
+        <span>Показывать снаряжение</span>
+    </label>
     <label id="use-magic-wrap" class="equipment-inline-toggle avatar-menu-toggle" for="use-magic">
         <input type="checkbox" id="use-magic" onchange="toggleSheetSettings()">
         <span>Использует магию</span>
@@ -922,10 +951,12 @@
     <h3>Настройки здоровья</h3>
     <label class="l">Текущие ОЗ</label>
     <input type="number" id="in-hp-cur" oninput="clampCurrentHPInput(); saveAll()">
-    <label class="l">ОЗ народа</label>
+    <label class="l" id="hp-anc-label">ОЗ народа</label>
     <input type="number" id="in-hp-anc" value="8" oninput="saveAll()">
-    <label class="l">ОЗ класса</label>
+    <label class="l" id="hp-cls-label">ОЗ класса</label>
     <input type="number" id="in-hp-cls" value="10" oninput="saveAll()">
+    <label class="l" id="hp-max-label">Макс ОЗ</label>
+    <input type="number" id="in-hp-max" value="18" oninput="clampCurrentHPInput(); saveAll()">
     <button onclick="closeModal('hpSettingsModal')" class="btn-primary">ГОТОВО</button>
 </div></div>
 
@@ -947,11 +978,97 @@
     <button onclick="repairShield()" class="btn-primary">ПОЧИНИТЬ</button><button onclick="closeModal('shieldModal')" class="btn-sec">ЗАКРЫТЬ</button>
 </div></div>
 
-<div id="profileModal" class="modal"><div class="modal-content"><h3>Профиль</h3><label class="l">Имя</label><input type="text" id="in-name" oninput="saveAll()"><div style="display:flex; gap:12px"><div style="flex:1"><label class="l">Народ</label><input type="text" id="in-anc" oninput="saveAll()"></div><div style="flex:1"><label class="l">Класс</label><input type="text" id="in-cls" oninput="saveAll()"></div></div><div style="display:flex; gap:12px"><div><label class="l">Уровень</label><input type="number" id="in-lvl" min="1" max="20" oninput="this.value = Math.min(20, Math.max(1, parseInt(this.value)||1)); saveAll()" onblur="this.value = Math.min(20, Math.max(1, parseInt(this.value)||1)); saveAll()"></div><div><label class="l">Скорость</label><input type="number" id="in-speed" oninput="saveAll()"></div></div><label class="l">Опыт</label><input type="number" id="in-exp" oninput="saveAll()"><button onclick="closeModal('profileModal')" class="btn-primary">СОХРАНИТЬ</button></div></div>
+<div id="profileModal" class="modal"><div class="modal-content"><h3>Профиль</h3><label class="l">Имя</label><input type="text" id="in-name" oninput="saveAll()"><div style="display:flex; gap:12px"><div style="flex:1"><label class="l">Народ</label><input type="text" id="in-anc" oninput="saveAll()"></div><div style="flex:1"><label class="l">Класс</label><input type="text" id="in-cls" oninput="saveAll()"></div></div><div style="display:flex; gap:12px"><div><label class="l">Уровень</label><input type="number" id="in-lvl" min="1" max="20" oninput="saveLevelInput()" onblur="saveLevelInput()"></div><div><label class="l">Скорость</label><input type="number" id="in-speed" oninput="saveAll()"></div></div><label class="l">Опыт</label><input type="number" id="in-exp" oninput="saveAll()"><button onclick="closeModal('profileModal')" class="btn-primary">СОХРАНИТЬ</button></div></div>
 
 <div id="abilityModal" class="modal"><div class="modal-content"><h3 id="ab-modal-title"></h3><input type="hidden" id="ab-modal-key"><label class="l">Модификатор</label><input type="number" id="ab-modal-val" min="-5" max="10" oninput="previewAbilityModal()"><div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;"><input type="checkbox" id="ab-modal-half"><label for="ab-modal-half" class="l">Повышение ½</label></div><div id="ab-modal-lores" style="display:none"><label class="l">Знания</label><input type="text" id="in-lore-1" placeholder="Знание 1"><input type="text" id="in-lore-2" placeholder="Знание 2"><input type="text" id="in-lore-3" placeholder="Знание 3"></div><button onclick="saveAbilityModal()" class="btn-primary">ГОТОВО</button></div></div>
 
 <div id="skillModal" class="modal"><div class="modal-content"><h3 id="sk-modal-title"></h3><input type="hidden" id="sk-modal-id"><label class="l">Бонус предмета</label><input type="number" id="sk-modal-item"><button onclick="saveSkillModal()" class="btn-primary">ГОТОВО</button></div></div>
+
+<div id="saveBonusModal" class="modal"><div class="modal-content">
+    <h3 id="save-bonus-title">Спасбросок</h3>
+    <input type="hidden" id="save-bonus-id">
+    <label class="l">Ручной бонус</label>
+    <input type="number" id="save-bonus-value" placeholder="Авто">
+    <button onclick="saveSaveBonusModal()" class="btn-primary">СОХРАНИТЬ</button>
+    <button onclick="clearSaveBonusModal()" class="btn-sec">АВТО</button>
+    <button onclick="closeModal('saveBonusModal')" class="btn-sec">ОТМЕНА</button>
+</div></div>
+
+<div id="workshopSkillsModal" class="modal"><div class="modal-content">
+    <h3>Навыки</h3>
+    <div id="workshop-skills-options" class="workshop-skills-options"></div>
+    <button onclick="closeModal('workshopSkillsModal')" class="btn-primary">ГОТОВО</button>
+</div></div>
+
+<div id="battleHpModal" class="modal"><div class="modal-content">
+    <input type="hidden" id="battle-hp-key">
+    <div class="hp-modal-head">
+        <h3 id="battle-hp-title">Участник битвы</h3>
+        <div class="hp-modal-actions">
+            <button type="button" id="battle-hp-keypad-toggle" class="hp-keypad-toggle" onclick="toggleBattleHpKeypad()" title="Свернуть клавиатуру">⌨<span>▲</span></button>
+        </div>
+    </div>
+    <div class="battle-hp-bars">
+        <div class="hp-modal-bar-label"><span>Здоровье</span><span id="battle-hp-numbers">0 / 0</span></div>
+        <div class="hp-modal-bar-track"><div id="battle-hp-fill-bar" class="hp-modal-bar-fill"></div></div>
+    </div>
+    <div class="atk-modal-grid">
+        <div>
+            <label class="l">Текущее ОЗ</label>
+            <input type="number" id="battle-hp-current" value="0" oninput="updateBattleHpPreview()">
+        </div>
+        <div>
+            <label class="l">Макс ОЗ</label>
+            <input type="number" id="battle-hp-max" value="0" oninput="updateBattleHpPreview()">
+        </div>
+    </div>
+    <div id="battle-hp-keypad-shell" class="hp-keypad-shell open battle-hp-keypad">
+        <div class="hp-keypad-top">
+            <input type="text" id="battle-hp-calc" class="hp-keypad-input" value="" placeholder="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <div class="hp-keypad-actions">
+                <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyBattleHpKeypad(1)">Лечение</button>
+                <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyBattleHpKeypad(-1)">Урон</button>
+            </div>
+        </div>
+        <div class="hp-keypad-body">
+            <div class="hp-keypad-grid">
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('7')">7</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('8')">8</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('9')">9</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('4')">4</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('5')">5</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('6')">6</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('1')">1</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('2')">2</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('3')">3</button>
+                <button type="button" class="hp-key hp-key-small hp-key-clear" onclick="clearBattleHpKeypad()">C</button>
+                <button type="button" class="hp-key" onclick="battleHpKeypadPress('0')">0</button>
+                <button type="button" class="hp-key hp-key-small hp-key-clear" onclick="battleHpKeypadBackspace()">⌫</button>
+            </div>
+        </div>
+    </div>
+    <div class="atk-modal-actions">
+        <button onclick="saveBattleHpModal()" class="btn-primary">СОХРАНИТЬ</button>
+        <button onclick="openBattleSheetFromHp()" class="btn-sec">В ЛИСТ</button>
+        <button onclick="closeModal('battleHpModal')" class="btn-sec">ОТМЕНА</button>
+    </div>
+</div></div>
+
+<div id="battleInitiativeModal" class="modal"><div class="modal-content">
+    <input type="hidden" id="battle-initiative-key">
+    <h3 id="battle-initiative-title">Инициатива</h3>
+    <div id="battle-initiative-options" class="battle-choice-list"></div>
+    <button onclick="closeModal('battleInitiativeModal')" class="btn-primary">ГОТОВО</button>
+</div></div>
+
+<div id="battleManualInitiativeModal" class="modal"><div class="modal-content">
+    <input type="hidden" id="battle-manual-initiative-key">
+    <h3 id="battle-manual-initiative-title">Инициатива</h3>
+    <label class="l">Значение инициативы</label>
+    <input type="number" id="battle-manual-initiative-value" value="0">
+    <button onclick="saveBattleManualInitiative()" class="btn-primary">ГОТОВО</button>
+    <button onclick="closeModal('battleManualInitiativeModal')" class="btn-sec">ОТМЕНА</button>
+</div></div>
 
 <div id="spellModal" class="modal"><div class="modal-content">
     <h3 id="spell-edit-title">Заклинание</h3>
@@ -995,14 +1112,14 @@
     <h3>Перейти на страницу</h3>
     <div class="menu-item" onclick="navClick(0)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Характеристики</div>
     <div class="menu-item" onclick="navClick(1)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Атаки</div>
-    <div class="menu-item" onclick="navClick(2)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Фиты</div>
-    <div class="menu-item" onclick="navClick(3)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Снаряжение</div>
-    <div class="menu-item" onclick="navClick(4)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Личность</div>
+    <div class="menu-item" id="page-nav-feats" onclick="navClick(2)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Фиты</div>
+    <div class="menu-item" id="page-nav-equipment" onclick="navClick(3)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Снаряжение</div>
+    <div class="menu-item" id="page-nav-personality" onclick="navClick(4)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Личность</div>
     <div class="menu-item" id="page-nav-magic" onclick="navClick(5)" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:8px; cursor:pointer; font-weight: 700;">Магия</div>
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.02"></script>
+<script src="js/app.js?v=1.03a"></script>
 
 <div class="footer-spacer"></div>
 </body>

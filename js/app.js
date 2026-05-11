@@ -1,23 +1,44 @@
 const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const LEGACY_AVATAR_KEY = 'pf2_av';
     const CHARACTERS_KEY = 'pf2_characters_v1';
+    const WORKSHOP_CHARACTERS_KEY = 'pf2_workshop_characters_v1';
     const ACTIVE_CHARACTER_KEY = 'pf2_active_character_id';
+    const ACTIVE_WORKSHOP_CHARACTER_KEY = 'pf2_workshop_active_character_id';
+    const WORKSHOP_ENABLED_KEY = 'pf2_workshop_enabled_v1';
+    const WORKSHOP_MENU_TAB_KEY = 'pf2_workshop_menu_tab_v1';
+    const WORKSHOP_BATTLE_KEY = 'pf2_workshop_battle_v1';
+    const CHARACTER_SCOPE_MAIN = 'characters';
+    const CHARACTER_SCOPE_WORKSHOP = 'workshop';
     const MAX_CHARACTERS = 10;
+    const MAX_WORKSHOP_CHARACTERS = 50;
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
     const ROUTE_MENU_HASH = '#characters';
+    const ROUTE_WORKSHOP_HASH = '#workshop';
     const ROUTE_CHARACTER_PREFIX = '#character=';
+    const ROUTE_WORKSHOP_CHARACTER_PREFIX = '#workshop-character=';
 
     let characters = [];
     let activeCharacterId = null;
+    let characterScope = CHARACTER_SCOPE_MAIN;
+    let loadedSheetCharacterId = null;
+    let loadedSheetScope = CHARACTER_SCOPE_MAIN;
+    let workshopMenuTab = 'bestiary';
     let characterDeleteSelectMode = false;
     let characterPendingDeleteIds = new Set();
     let characterMenuOpenId = null;
     let characterToolbarMenuOpen = false;
     let cloudActionMenuOpen = false;
+    let battleAddPanelOpen = false;
+    let battlePendingAddKeys = new Set();
+    let battleReorderMode = false;
+    let battleSelectedReorderIdx = null;
+    let battleDraggedIdx = null;
+    let battleTempParticipantKey = null;
+    let battleHpKeypadOpen = true;
     let draggedCharacterIdx = null;
     let importCharacterAsNew = false;
     let appRouteReady = false;
@@ -41,8 +62,62 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let touchStartAt = 0;
     let touchStartTarget = null;
 
+    function getMinSheetLevel(scope = characterScope) {
+        return isWorkshopScope(scope) ? -1 : 1;
+    }
+
+    function isBattleSheetEmbed() {
+        try {
+            return new URLSearchParams(window.location.search || '').get('battleSheet') === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function clampLevelForScope(val, scope = characterScope) {
+        const parsed = parseInt(val);
+        const fallback = isWorkshopScope(scope) ? 0 : 1;
+        return Math.max(getMinSheetLevel(scope), Math.min(20, Number.isFinite(parsed) ? parsed : fallback));
+    }
+
+    function isWorkshopSheetRestricted() {
+        return isWorkshopScope();
+    }
+
+    function getAvailableSheetPages() {
+        const isPC = window.innerWidth >= 1000;
+        if (isWorkshopSheetRestricted()) {
+            const pages = isPC ? [1] : [0, 1];
+            if (isWorkshopFeatsShown()) pages.push(2);
+            if (isWorkshopEquipmentShown()) pages.push(3);
+            if (isWorkshopPersonalityShown()) pages.push(4);
+            if (isMagicEnabled()) pages.push(5);
+            return pages;
+        }
+        const pages = isPC ? [1, 2, 3, 4] : [0, 1, 2, 3, 4];
+        if (isMagicEnabled()) pages.push(5);
+        return pages;
+    }
+
+    function coerceSheetPage(idx, direction = 0) {
+        const pages = getAvailableSheetPages();
+        if (!pages.length) return 0;
+        if (pages.includes(idx)) return idx;
+        const isPC = window.innerWidth >= 1000;
+        if (isPC) {
+            if (idx <= pages[0]) return pages[0];
+            if (idx >= pages[pages.length - 1]) return pages[pages.length - 1];
+        }
+        if (direction > 0) return pages.find(page => page > idx) ?? pages[0];
+        if (direction < 0) {
+            const before = pages.filter(page => page < idx);
+            return before.length ? before[before.length - 1] : pages[pages.length - 1];
+        }
+        return pages.reduce((best, page) => Math.abs(page - idx) < Math.abs(best - idx) ? page : best, pages[0]);
+    }
+
     function navClick(idx) {
-        if (idx === 5 && !isMagicEnabled()) return;
+        if (!getAvailableSheetPages().includes(idx)) return;
         if (window.innerWidth < 1000 && currentPage === idx) {
             openModal('pageNavModal');
         } else {
@@ -54,6 +129,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     function switchPage(idx) {
         let newIdx = idx;
         const isPC = window.innerWidth >= 1000;
+        const direction = idx > currentPage ? 1 : (idx < currentPage ? -1 : 0);
         
         if (isPC) {
             if (newIdx < 1) newIdx = 1;
@@ -63,7 +139,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
             else if (newIdx >= totalPages) newIdx = 0;
         }
 
-        if (!isMagicEnabled() && newIdx === 5) newIdx = isPC ? 4 : (idx > currentPage ? 0 : 4);
+        newIdx = coerceSheetPage(newIdx, direction);
 
         currentPage = newIdx;
         const slider = document.getElementById('pages-slider');
@@ -77,11 +153,29 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
         requestAnimationFrame(updateAttackTagsOverflow);
+        syncWorkshopSheetUI();
         syncMobileReorderButtons();
     }
 
     function isMagicEnabled() {
         return !!document.getElementById('use-magic')?.checked;
+    }
+
+    function isWorkshopToggleEnabled(id, fallback = false) {
+        const el = document.getElementById(id);
+        return el ? !!el.checked : !!fallback;
+    }
+
+    function isWorkshopFeatsShown() {
+        return !isWorkshopSheetRestricted() || isWorkshopToggleEnabled('workshop-show-feats', false);
+    }
+
+    function isWorkshopPersonalityShown() {
+        return !isWorkshopSheetRestricted() || isWorkshopToggleEnabled('workshop-show-personality', true);
+    }
+
+    function isWorkshopEquipmentShown() {
+        return !isWorkshopSheetRestricted() || isWorkshopToggleEnabled('workshop-show-equipment', false);
     }
 
     function isFocusEnabled() {
@@ -106,6 +200,58 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         if (!enabled && currentPage === 5) switchPage(window.innerWidth >= 1000 ? 4 : 0);
     }
 
+    function syncWorkshopSheetUI() {
+        const restricted = isWorkshopSheetRestricted();
+        document.body.classList.toggle('workshop-sheet', restricted);
+        const showByPage = {
+            2: !restricted || isWorkshopFeatsShown(),
+            3: !restricted || isWorkshopEquipmentShown(),
+            4: !restricted || isWorkshopPersonalityShown(),
+            5: isMagicEnabled()
+        };
+        Object.entries(showByPage).forEach(([idx, show]) => {
+            const btn = document.getElementById(`btn-p${idx}`);
+            if (btn) btn.style.display = show ? '' : 'none';
+        });
+        const navItems = {
+            feats: showByPage[2],
+            equipment: showByPage[3],
+            personality: showByPage[4],
+            magic: showByPage[5]
+        };
+        Object.entries(navItems).forEach(([name, show]) => {
+            const item = document.getElementById(`page-nav-${name}`);
+            if (item) item.style.display = show ? '' : 'none';
+        });
+        const magicBtn = document.getElementById('btn-p5');
+        const magicItem = document.getElementById('page-nav-magic');
+        const showMagic = isMagicEnabled();
+        if (magicBtn) magicBtn.style.display = showMagic ? '' : 'none';
+        if (magicItem) magicItem.style.display = showMagic ? '' : 'none';
+        ['workshop-show-feats-wrap', 'workshop-show-personality-wrap', 'workshop-show-equipment-wrap'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = restricted ? 'flex' : 'none';
+        });
+        const quickFeats = document.getElementById('attack-quick-feats-section');
+        if (quickFeats) quickFeats.style.display = restricted ? 'none' : '';
+        ['hp-anc-label', 'in-hp-anc', 'hp-cls-label', 'in-hp-cls'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = restricted ? 'none' : '';
+        });
+        ['hp-max-label', 'in-hp-max'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = restricted ? 'block' : 'none';
+        });
+        const lvlInput = document.getElementById('in-lvl');
+        if (lvlInput) {
+            lvlInput.min = String(getMinSheetLevel());
+            lvlInput.max = '20';
+        }
+        renderWorkshopSkillsPanel();
+        if (restricted) personalitySectionCollapsed.proficiency = false;
+        if (!getAvailableSheetPages().includes(currentPage)) switchPage(window.innerWidth >= 1000 ? 1 : 0);
+    }
+
     function syncFocusUsage() {
         const enabled = isFocusEnabled();
         const wrap = document.getElementById('use-focus-wrap');
@@ -126,6 +272,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     function syncSheetSettings() {
         syncMagicUsage();
         syncFocusUsage();
+        syncWorkshopSheetUI();
     }
 
     function toggleSheetSettings() {
@@ -173,6 +320,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         if (window.innerWidth >= 1000 && currentPage === 0) {
             switchPage(1); 
         }
+        syncWorkshopSheetUI();
         requestAnimationFrame(updateAttackTagsOverflow);
         syncMobileReorderButtons();
     });
@@ -187,6 +335,8 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     };
 
     let skillProf = {}; let saveProf = { fort: 0, ref: 0, will: 0, perc: 0 };
+    let saveBonuses = {};
+    let workshopVisibleSkillIds = [];
     let heroPoints = 0; let lastMaxHP = 0;
     let itemBonuses = {}; let lores = { 1: '', 2: '', 3: '' };
     let abilities = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
@@ -381,7 +531,13 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     }
 
     function clampLevel(val) {
-        return Math.max(1, Math.min(20, parseInt(val) || 1));
+        return clampLevelForScope(val, characterScope);
+    }
+
+    function saveLevelInput() {
+        const lvlEl = document.getElementById('in-lvl');
+        if (lvlEl) lvlEl.value = clampLevel(lvlEl.value);
+        saveAll();
     }
 
     function renderAttackModalOptions() {
@@ -898,6 +1054,9 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     }
 
     function getFeatSlot(slotId) {
+        if (isWorkshopManualFeatId(slotId)) {
+            return { id: String(slotId), level: '', tab: 'my', type: 'Фит', manual: true };
+        }
         return FEAT_SLOTS.find(slot => slot.id === slotId) || null;
     }
 
@@ -919,17 +1078,23 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         return titleCaseRu(clean || 'Черта');
     }
 
+    function isWorkshopManualFeatId(slotId) {
+        return String(slotId || '').startsWith('workshop-manual-feat-');
+    }
+
     function getFeatPageLabel(tabKey) {
         return titleCaseRu(getFeatTabLabel(tabKey));
     }
 
     function formatFeatPageMeta(slot) {
         if (!slot) return '';
+        if (slot.manual) return 'Главные фиты';
         return `Уровень ${slot.level}: ${getFeatPageLabel(slot.tab)}`;
     }
 
     function formatFeatFullMeta(slot) {
         if (!slot) return '';
+        if (slot.manual) return 'Главные фиты';
         return `${formatFeatPageMeta(slot)}
 ${getCleanFeatType(slot.type)}`;
     }
@@ -947,7 +1112,8 @@ ${getCleanFeatType(slot.type)}`;
         const tabs = document.getElementById('feat-tabs');
         if (!tabs) return;
         const lvl = getCurrentSheetLevel();
-        tabs.innerHTML = FEAT_TAB_ORDER.map(tab => {
+        const tabOrder = isWorkshopSheetRestricted() ? FEAT_TAB_ORDER.filter(tab => tab.key === 'my') : FEAT_TAB_ORDER;
+        tabs.innerHTML = tabOrder.map(tab => {
             let filled = 0;
             let total = 0;
 
@@ -974,6 +1140,7 @@ ${getCleanFeatType(slot.type)}`;
         const lvlOut = document.getElementById('feats-current-level');
         if (lvlOut) lvlOut.innerText = lvl;
 
+        if (isWorkshopSheetRestricted()) currentFeatTab = 'my';
         if (!FEAT_TAB_ORDER.some(tab => tab.key === currentFeatTab)) currentFeatTab = 'my';
         renderFeatTabs();
 
@@ -1024,9 +1191,10 @@ ${getCleanFeatType(slot.type)}`;
 
     function renderMyFeats(list) {
         const cards = myFeats.map((item, idx) => renderMyFeatCard(item, idx)).join('');
+        const addLabel = isWorkshopSheetRestricted() ? '+ ДОБАВИТЬ ФИТ' : '+ ДОБАВИТЬ ШАБЛОН';
         list.innerHTML = `
             ${cards || ''}
-            <div class="my-feats-toolbar"><button type="button" class="my-feats-add-btn" onclick="addMyFeatTemplate()">+ ДОБАВИТЬ ШАБЛОН</button></div>
+            <div class="my-feats-toolbar"><button type="button" class="my-feats-add-btn" onclick="addMyFeatTemplate()">${addLabel}</button></div>
         `;
     }
 
@@ -1034,16 +1202,18 @@ ${getCleanFeatType(slot.type)}`;
         const slot = getFeatSlot(item.sourceSlotId);
         const data = slot ? (feats[item.sourceSlotId] || {}) : {};
         const filled = !!(slot && isFeatFilled(data));
+        const workshopManual = isWorkshopSheetRestricted() && slot?.manual;
         const tabClass = slot ? slot.tab : 'my';
         const cleanType = slot ? getCleanFeatType(slot.type) : 'Черта';
-        const name = filled ? (String(data.name || '').trim() || cleanType) : 'ШАБЛОН';
+        const name = filled ? (String(data.name || '').trim() || cleanType) : (workshopManual ? 'Новый фит' : 'ШАБЛОН');
         const emoji = filled ? String(data.emoji || '').trim() : '';
         const emojiHTML = emoji ? `<span class="feat-emoji">${escapeHtml(emoji)}</span>` : '';
-        const shortText = filled ? (String(data.short || '').trim() || 'Краткое описание не заполнено.') : 'Нажми ⚙ и выбери фит из доступных.';
+        const shortText = filled ? (String(data.short || '').trim() || 'Краткое описание не заполнено.') : (workshopManual ? 'Нажми ⚙ и заполни фит вручную.' : 'Нажми ⚙ и выбери фит из доступных.');
         const meta = filled ? formatFeatPageMeta(slot) : 'Главные фиты';
         const reorderActive = mobileReorderMode === 'feats';
         const picked = reorderActive && selectedMobileReorder && selectedMobileReorder.type === 'feats' && selectedMobileReorder.idx === idx;
-        const clickAction = reorderActive ? `handleReorderTap(event, 'feats', ${idx})` : (filled ? `openFeatView('${slot.id}')` : `openMyFeatTemplate('${item.id}')`);
+        const editAction = workshopManual ? `openFeatEditor('${slot.id}')` : `openMyFeatTemplate('${item.id}')`;
+        const clickAction = reorderActive ? `handleReorderTap(event, 'feats', ${idx})` : (filled ? `openFeatView('${slot.id}')` : editAction);
         return `
             <div class="feat-card my-feat-card feat-tab-${tabClass} ${filled ? 'filled' : 'empty'} ${picked ? 'reorder-picked' : ''}" draggable="${window.innerWidth >= 1000 ? 'true' : 'false'}" data-my-feat-id="${item.id}" data-reorder-type="feats" data-reorder-index="${idx}" onclick="${clickAction}" ondragstart="myFeatDragStart(event, ${idx})" ondragend="myFeatDragEnd(event)" ondragover="myFeatDragOver(event)" ondrop="myFeatDrop(event, ${idx})">
                 <div class="feat-card-head">
@@ -1051,7 +1221,7 @@ ${getCleanFeatType(slot.type)}`;
                         <div class="my-feat-drag" title="Переместить" onclick="if(window.innerWidth >= 1000) event.stopPropagation()">☰</div>
                         <div class="feat-slot-type">${escapeHtml(meta)}</div>
                     </div>
-                    <button type="button" class="feat-gear" ${reorderActive ? '' : `onclick="event.stopPropagation(); openMyFeatTemplate('${item.id}')"`} title="Настроить шаблон">⚙</button>
+                    <button type="button" class="feat-gear" ${reorderActive ? '' : `onclick="event.stopPropagation(); ${editAction}"`} title="Настроить">⚙</button>
                 </div>
                 <div class="feat-title-line">${emojiHTML}<div class="feat-name">${escapeHtml(name)}</div></div>
                 <div class="feat-short">${escapeHtml(shortText)}</div>
@@ -1087,8 +1257,15 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function renderAttackQuickFeats() {
+        const section = document.getElementById('attack-quick-feats-section');
         const list = document.getElementById('attack-quick-feats-list');
         if (!list) return;
+        if (isWorkshopSheetRestricted()) {
+            if (section) section.style.display = 'none';
+            list.innerHTML = '';
+            return;
+        }
+        if (section) section.style.display = '';
 
         const selected = getAttackQuickFeatItems();
         const buttons = selected.map(entry => {
@@ -1223,6 +1400,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function openAttackQuickFeatsModal() {
+        if (isWorkshopSheetRestricted()) return;
         renderAttackQuickFeatSourceList();
         openModal('attackQuickFeatsModal');
     }
@@ -1253,10 +1431,21 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function openAttackQuickFeatView(slotId) {
+        if (isWorkshopSheetRestricted()) return;
         openFeatView(slotId, 'short');
     }
 
     function addMyFeatTemplate() {
+        if (isWorkshopSheetRestricted()) {
+            const slotId = `workshop-manual-feat-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+            const itemId = Date.now() + Math.floor(Math.random() * 1000);
+            myFeats.push({ id: itemId, sourceSlotId: slotId, manual: true });
+            feats[slotId] = { emoji: '', name: '', short: '', full: '', showInAttacks: false };
+            saveAll(false);
+            renderFeats();
+            openFeatEditor(slotId);
+            return;
+        }
         myFeats.push({ id: Date.now() + Math.floor(Math.random() * 1000), sourceSlotId: '', showInAttacks: false });
         saveAll();
         renderFeats();
@@ -1265,6 +1454,11 @@ ${getCleanFeatType(slot.type)}`;
     function openMyFeatTemplate(itemId) {
         if (mobileReorderMode === 'feats' || suppressNextClickAfterReorder) return;
         currentMyFeatId = String(itemId);
+        const item = myFeats.find(x => String(x.id) === String(currentMyFeatId));
+        if (isWorkshopSheetRestricted() && item?.sourceSlotId) {
+            openFeatEditor(item.sourceSlotId);
+            return;
+        }
         renderMyFeatSourceList();
         openModal('myFeatTemplateModal');
     }
@@ -1378,9 +1572,9 @@ ${getCleanFeatType(slot.type)}`;
         const slot = getFeatSlot(slotId);
         if (!slot) return;
         const data = feats[slotId] || {};
-        const canShowInAttacks = isSlotInMainFeats(slotId);
+        const canShowInAttacks = !isWorkshopSheetRestricted() && isSlotInMainFeats(slotId);
         document.getElementById('feat-slot-id').value = slotId;
-        document.getElementById('feat-edit-title').innerText = isFeatFilled(data) ? 'Настройка черты' : 'Добавить черту';
+        document.getElementById('feat-edit-title').innerText = slot.manual ? 'Настройка фита' : (isFeatFilled(data) ? 'Настройка черты' : 'Добавить черту');
         document.getElementById('feat-edit-meta').innerText = formatFeatFullMeta(slot);
         document.getElementById('feat-emoji').value = data.emoji || '';
         renderFeatEmojiPicker();
@@ -1396,10 +1590,11 @@ ${getCleanFeatType(slot.type)}`;
             attackCb.disabled = !canShowInAttacks;
         }
         if (attackWrap) {
+            attackWrap.style.display = isWorkshopSheetRestricted() ? 'none' : '';
             attackWrap.classList.toggle('disabled', !canShowInAttacks);
             attackWrap.title = canShowInAttacks ? '' : 'Сначала добавь этот фит в “Главные фиты”';
         }
-        if (attackNote) attackNote.classList.toggle('show', !canShowInAttacks);
+        if (attackNote) attackNote.classList.toggle('show', !isWorkshopSheetRestricted() && !canShowInAttacks);
         openModal('featEditModal');
     }
 
@@ -1425,6 +1620,14 @@ ${getCleanFeatType(slot.type)}`;
 
     function clearFeatSlot() {
         const slotId = document.getElementById('feat-slot-id').value;
+        if (isWorkshopManualFeatId(slotId)) {
+            delete feats[slotId];
+            myFeats = myFeats.filter(item => String(item.sourceSlotId) !== String(slotId));
+            saveAll();
+            closeModal('featEditModal');
+            renderFeats();
+            return;
+        }
         if (slotId) delete feats[slotId];
         saveAll();
         closeModal('featEditModal');
@@ -1959,12 +2162,13 @@ ${getCleanFeatType(slot.type)}`;
                 return { id, itemId };
             });
         equipmentSettings = normalizeEquipmentSettings(equipmentSettings);
+        if (isWorkshopSheetRestricted()) equipmentSettings.backpackEnabled = false;
         if (!EQUIPMENT_TABS.some(tab => tab.key === currentEquipmentTab)) currentEquipmentTab = equipmentSettings.backpackEnabled ? 'backpack' : 'carried';
         if (!equipmentSettings.backpackEnabled && currentEquipmentTab === 'backpack') currentEquipmentTab = 'carried';
     }
 
     function getBackpackItemIdSet() {
-        if (!equipmentSettings.backpackEnabled) return new Set();
+        if (isWorkshopSheetRestricted() || !equipmentSettings.backpackEnabled) return new Set();
         return new Set(equipmentBackpack.map(slot => String(slot.itemId || '')).filter(Boolean));
     }
 
@@ -2202,7 +2406,7 @@ ${getCleanFeatType(slot.type)}`;
         const tabs = document.getElementById('equipment-tabs');
         if (!tabs) return;
         normalizeEquipmentData();
-        const visibleTabs = EQUIPMENT_TABS.filter(tab => tab.key !== 'backpack' || equipmentSettings.backpackEnabled);
+        const visibleTabs = EQUIPMENT_TABS.filter(tab => tab.key !== 'backpack' || (!isWorkshopSheetRestricted() && equipmentSettings.backpackEnabled));
         tabs.innerHTML = visibleTabs.map(tab => `<button type="button" class="feat-tab-btn equipment-tab-${tab.key} ${currentEquipmentTab === tab.key ? 'active' : ''}" onclick="switchEquipmentTab('${tab.key}')"><span>${escapeHtml(tab.label)}</span><small>${getEquipmentTabCount(tab.key)}</small></button>`).join('');
     }
 
@@ -2241,6 +2445,10 @@ ${getCleanFeatType(slot.type)}`;
         const inBackpack = isItemInBackpack(item.id);
         const typeLabel = EQUIPMENT_ITEM_TYPES.find(t => t.key === item.itemType)?.label || 'Другое';
         const qty = formatConsumableQuantity(item);
+        const metaParts = [typeLabel];
+        if (item.equipped) metaParts.push('экипировано');
+        if (!isWorkshopSheetRestricted()) metaParts.push(formatItemBulk(item));
+        if (qty) metaParts.push(qty);
         const action = item.itemType === 'consumable'
             ? `<div class="equipment-qty-actions"><button type="button" class="equipment-consume-btn" onclick="event.stopPropagation(); useConsumableItem('${item.id}')" title="Использовать"${(parseInt(item.quantity) || 0) <= 0 ? ' disabled' : ''}>✓</button><button type="button" class="equipment-consume-btn" onclick="event.stopPropagation(); restoreConsumableItem('${item.id}')" title="Вернуть 1">+</button></div>`
             : `<button type="button" class="equipment-gear" onclick="event.stopPropagation(); openEquipmentEditor('${item.id}')" title="Настроить">⚙</button>`;
@@ -2248,7 +2456,7 @@ ${getCleanFeatType(slot.type)}`;
             ${iconHTML}
             <div class="equipment-card-main">
                 <div class="equipment-card-name">${escapeHtml(name)}</div>
-                <div class="equipment-card-meta">${escapeHtml(typeLabel)}${item.equipped ? ' · экипировано' : ''} · ${escapeHtml(formatItemBulk(item))}${qty ? ` · <span class="equipment-qty-badge">${escapeHtml(qty)}</span>` : ''}</div>
+                <div class="equipment-card-meta">${escapeHtml(metaParts.join(' · '))}</div>
                 <div class="equipment-card-short">${escapeHtml(short)}</div>
             </div>
             ${action}
@@ -2664,7 +2872,12 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('equipment-view-title').innerText = `${item.icon ? item.icon + ' ' : ''}${item.name || 'Предмет'}`;
         const typeLabel = EQUIPMENT_ITEM_TYPES.find(t => t.key === item.itemType)?.label || 'Другое';
         const qty = formatConsumableQuantity(item);
-        document.getElementById('equipment-view-meta').innerText = `${typeLabel}${item.equipped ? ' · экипировано' : ''} · ${formatItemBulk(item)}${qty ? ` · ${qty}` : ''}${isItemInBackpack(item.id) ? ' · в рюкзаке' : ''}`;
+        const metaParts = [typeLabel];
+        if (item.equipped) metaParts.push('экипировано');
+        if (!isWorkshopSheetRestricted()) metaParts.push(formatItemBulk(item));
+        if (qty) metaParts.push(qty);
+        if (!isWorkshopSheetRestricted() && isItemInBackpack(item.id)) metaParts.push('в рюкзаке');
+        document.getElementById('equipment-view-meta').innerText = metaParts.join(' · ');
         updateEquipmentViewText();
         openModal('equipmentViewModal');
     }
@@ -3016,9 +3229,107 @@ ${getCleanFeatType(slot.type)}`;
         return `<div class="skill-item"><div class="skill-name" id="name-${id}" data-label="${lbl}" onclick="openSkillModal('${id}', '${lbl}')">${lbl}</div><div style="display:flex;align-items:center;gap:8px"><div class="dot-container" data-skill-id="${id}"><div class="dot" onclick="setSkillProf('${id}', 1)"></div><div class="dot" onclick="setSkillProf('${id}', 2)"></div><div class="dot" onclick="setSkillProf('${id}', 3)"></div><div class="dot" onclick="setSkillProf('${id}', 4)"></div></div><div class="skill-roll-btn v" onclick="rollDice('${lbl}', this.innerText)" id="val-${id}">+0</div></div></div>`;
     }
 
+    function parseSkillEntry(s) {
+        const str = String(s || '');
+        const parts = str.includes('|') ? str.split('|') : [str, str];
+        return { id: parts[0], label: parts.slice(1).join('|') || parts[0], raw: str };
+    }
+
+    function getWorkshopSkillEntries() {
+        const entries = [];
+        const seen = new Set();
+        Object.values(DATA_MAP).forEach(info => {
+            const skillsList = [...info.skills];
+            if (info.key === 'int') {
+                for (let i = 1; i <= 3; i++) {
+                    if (lores[i]) skillsList.push(`lore-${i}|${lores[i]}`);
+                }
+            }
+            skillsList.map(parseSkillEntry).forEach(entry => {
+                if (!entry.id || seen.has(entry.id)) return;
+                seen.add(entry.id);
+                entries.push(entry);
+            });
+        });
+        return entries;
+    }
+
+    function renderWorkshopSkillsPanel() {
+        const restricted = isWorkshopSheetRestricted();
+        const strips = document.querySelectorAll('#workshop-skills-strip');
+        strips.forEach(strip => {
+            strip.style.display = restricted ? '' : 'none';
+        });
+        if (!restricted) return;
+        const entries = getWorkshopSkillEntries();
+        const entryById = new Map(entries.map(entry => [entry.id, entry]));
+        workshopVisibleSkillIds = workshopVisibleSkillIds.filter(id => entryById.has(id));
+        const selected = workshopVisibleSkillIds.map(id => entryById.get(id)).filter(Boolean);
+        const html = selected.length
+            ? selected.map(entry => renderSkill(`${entry.id}|${entry.label}`)).join('')
+            : '<div class="workshop-skills-empty">Нажми, чтобы выбрать навыки</div>';
+        document.querySelectorAll('#workshop-skills-list').forEach(root => { root.innerHTML = html; });
+    }
+
+    function renderWorkshopSkillsOptions() {
+        const root = document.getElementById('workshop-skills-options');
+        if (!root) return;
+        const selected = new Set(workshopVisibleSkillIds);
+        root.innerHTML = getWorkshopSkillEntries().map(entry => `
+            <label class="workshop-skill-option">
+                <input type="checkbox" ${selected.has(entry.id) ? 'checked' : ''} onchange="toggleWorkshopSkillVisibility('${jsEscape(entry.id)}', this.checked)">
+                <span>${escapeHtml(entry.label)}</span>
+            </label>
+        `).join('');
+    }
+
+    function openWorkshopSkillsModal() {
+        if (!isWorkshopSheetRestricted()) return;
+        renderWorkshopSkillsOptions();
+        openModal('workshopSkillsModal');
+    }
+
+    function toggleWorkshopSkillVisibility(id, checked) {
+        const key = String(id || '');
+        const set = new Set(workshopVisibleSkillIds);
+        if (checked) set.add(key);
+        else set.delete(key);
+        workshopVisibleSkillIds = getWorkshopSkillEntries().map(entry => entry.id).filter(entryId => set.has(entryId));
+        renderWorkshopSkillsPanel();
+        saveAll();
+    }
+
     function setSkillProf(id, val) { skillProf[id] = (skillProf[id] === val) ? 0 : val; saveAll(); }
     function setSaveProf(id, val) { saveProf[id] = (saveProf[id] === val) ? 0 : val; saveAll(); }
     function setHeroPoints(val) { heroPoints = (heroPoints === val) ? val - 1 : val; saveAll(); }
+    function hasManualSaveBonus(id) {
+        const raw = saveBonuses?.[id];
+        return raw !== undefined && raw !== null && String(raw).trim() !== '';
+    }
+    function getManualSaveBonus(id) {
+        return parseInt(saveBonuses?.[id]) || 0;
+    }
+    function openSaveBonusModal(id, label = '') {
+        document.getElementById('save-bonus-id').value = id;
+        document.getElementById('save-bonus-title').innerText = label || 'Спасбросок';
+        document.getElementById('save-bonus-value').value = hasManualSaveBonus(id) ? getManualSaveBonus(id) : '';
+        openModal('saveBonusModal');
+    }
+    function saveSaveBonusModal() {
+        const id = document.getElementById('save-bonus-id').value;
+        const raw = String(document.getElementById('save-bonus-value').value || '').trim();
+        if (!id) return;
+        if (raw === '') delete saveBonuses[id];
+        else saveBonuses[id] = parseInt(raw) || 0;
+        closeModal('saveBonusModal');
+        saveAll();
+    }
+    function clearSaveBonusModal() {
+        const id = document.getElementById('save-bonus-id').value;
+        if (id) delete saveBonuses[id];
+        closeModal('saveBonusModal');
+        saveAll();
+    }
     function normalizeTrainingRank(value) { return Math.max(0, Math.min(4, parseInt(value) || 0)); }
     function normalizeProficiencies(source = {}) {
         const armor = {};
@@ -3077,6 +3388,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function openRestMenu() {
+        if (isWorkshopSheetRestricted()) return;
         const lvl = clampLevel(document.getElementById('in-lvl').value); document.getElementById('in-lvl').value = lvl;
         const con = parseInt(document.getElementById('score-con').value) || 0;
         const recovery = Math.max(0, lvl + con);
@@ -3086,6 +3398,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function doRest() {
+        if (isWorkshopSheetRestricted()) return;
         const lvl = clampLevel(document.getElementById('in-lvl').value); document.getElementById('in-lvl').value = lvl;
         const con = parseInt(document.getElementById('score-con').value) || 0;
         const recovery = Math.max(0, lvl + con);
@@ -3271,6 +3584,12 @@ ${getCleanFeatType(slot.type)}`;
 
 
     function getCurrentMaxHP() {
+        if (isWorkshopSheetRestricted()) {
+            const maxEl = document.getElementById('in-hp-max');
+            const curEl = document.getElementById('in-hp-cur');
+            const fallback = parseInt(curEl?.value) || 0;
+            return Math.max(0, parseInt(maxEl?.value) || fallback);
+        }
         const lvlEl = document.getElementById('in-lvl');
         const lvl = lvlEl ? clampLevel(lvlEl.value) : 1;
         const conEl = document.getElementById('score-con');
@@ -3414,6 +3733,7 @@ ${getCleanFeatType(slot.type)}`;
                 el.innerText = (val >= 0 ? '+' : '') + val;
             });
         }
+        renderWorkshopSkillsPanel();
         const armorForPenalty = getEquippedEquipmentItem('armor');
         let armorPen = armorForPenalty ? Math.abs(parseInt(armorForPenalty.armor?.pen) || 0) : 0;
 
@@ -3431,9 +3751,11 @@ ${getCleanFeatType(slot.type)}`;
             const id = cont.dataset.save, p = saveProf[id] || 0;
             cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
             let mKey = id === 'fort' ? 'con' : (id === 'ref' ? 'dex' : 'wis');
-            const resVal = mods[mKey] + (p === 0 ? 0 : lvl + p * 2);
+            const autoVal = mods[mKey] + (p === 0 ? 0 : lvl + p * 2);
+            const resVal = hasManualSaveBonus(id) ? getManualSaveBonus(id) : autoVal;
             document.querySelectorAll(`#val-${id}`).forEach(el => {
                 el.innerText = (resVal >= 0 ? '+' : '') + resVal;
+                el.classList.toggle('manual', hasManualSaveBonus(id));
             });
         });
 
@@ -3562,7 +3884,7 @@ ${getCleanFeatType(slot.type)}`;
             document.getElementById('in-hp-cur').value = curHP;
         }
 
-        if (lastMaxHP > 0 && currentMaxHP !== lastMaxHP) {
+        if (!isWorkshopSheetRestricted() && lastMaxHP > 0 && currentMaxHP !== lastMaxHP) {
             let diff = currentMaxHP - lastMaxHP;
             curHP = Math.max(0, curHP + diff);
             document.getElementById('in-hp-cur').value = curHP;
@@ -3644,7 +3966,7 @@ ${getCleanFeatType(slot.type)}`;
         renderPersonalitySections();
         
         const dyingUi = document.getElementById('dying-ui');
-        if (dyingUi) dyingUi.style.display = (curHP <= 0 && dyingLevel > 0) ? 'block' : 'none';
+        if (dyingUi) dyingUi.style.display = (!isWorkshopSheetRestricted() && curHP <= 0 && dyingLevel > 0) ? 'block' : 'none';
         updateDyingDots();
 
         renderAttackMapBar();
@@ -3893,6 +4215,20 @@ ${getCleanFeatType(slot.type)}`;
         let severityRatio = currentMaxHP > 0 ? rawVal / currentMaxHP : 0;
         let shieldDamageAnimation = null;
 
+        if (isWorkshopSheetRestricted()) {
+            hpCurEl.value = dir === -1
+                ? Math.max(0, cur - rawVal)
+                : Math.min(currentMaxHP, cur + rawVal);
+            const hpAfter = parseInt(hpCurEl.value) || 0;
+            const hpPctAfter = currentMaxHP > 0 ? clampPct01(hpAfter / currentMaxHP) : 0;
+            if (hpCalcEl) hpCalcEl.value = '';
+            clampCurrentHPInput();
+            saveAll();
+            updateHpKeypadDisplay();
+            animateHpChange(dir === -1 ? 'damage' : 'heal', Math.abs(hpAfter - hpBefore) || rawVal, dir === -1 ? severityRatio : 0, hpPctBefore, hpPctAfter);
+            return;
+        }
+
         if (dir === -1) {
             let incomingDamage = Math.max(0, rawVal);
             const wasCritDamage = !!document.getElementById('hp-critical-damage')?.checked;
@@ -4021,6 +4357,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function appendDiceLog(innerContent, color = 'var(--accent)', extraClass = '') {
         const log = document.getElementById('dice-log');
+        if (!log) return;
         if (log.children.length >= 5) { log.removeChild(log.firstChild); }
 
         Array.from(log.children).forEach(c => c.classList.add('dice-log-collapsed'));
@@ -4043,6 +4380,12 @@ ${getCleanFeatType(slot.type)}`;
         refreshDiceLogCloseButton();
         log.classList.toggle('hide-old', notificationsCollapsed);
     }
+
+    window.addEventListener('message', event => {
+        const data = event?.data || {};
+        if (!data || data.type !== 'intlistpc-dice-log') return;
+        appendDiceLog(String(data.innerContent || ''), String(data.color || 'var(--accent)'), String(data.extraClass || ''));
+    });
 
     function appendRestLog(recovery) {
         appendDiceLog(`<div class="dice-log-rest-content">Отдых +${recovery} HP</div>`, 'var(--hp-green)', 'dice-log-rest');
@@ -4976,8 +5319,33 @@ ${getCleanFeatType(slot.type)}`;
         pulseLevelUpVisuals('done');
     }
 
-    function characterSheetKey(id) { return `pf2_character_${id}_sheet`; }
-    function characterAvatarKey(id) { return `pf2_character_${id}_avatar`; }
+    function normalizeCharacterScope(scope = characterScope) {
+        return scope === CHARACTER_SCOPE_WORKSHOP ? CHARACTER_SCOPE_WORKSHOP : CHARACTER_SCOPE_MAIN;
+    }
+
+    function isWorkshopScope(scope = characterScope) {
+        return normalizeCharacterScope(scope) === CHARACTER_SCOPE_WORKSHOP;
+    }
+
+    function getCharacterLimit(scope = characterScope) {
+        return isWorkshopScope(scope) ? MAX_WORKSHOP_CHARACTERS : MAX_CHARACTERS;
+    }
+
+    function getCharactersKey(scope = characterScope) {
+        return isWorkshopScope(scope) ? WORKSHOP_CHARACTERS_KEY : CHARACTERS_KEY;
+    }
+
+    function getActiveCharacterKey(scope = characterScope) {
+        return isWorkshopScope(scope) ? ACTIVE_WORKSHOP_CHARACTER_KEY : ACTIVE_CHARACTER_KEY;
+    }
+
+    function characterSheetKey(id, scope = characterScope) {
+        return isWorkshopScope(scope) ? `pf2_workshop_character_${id}_sheet` : `pf2_character_${id}_sheet`;
+    }
+
+    function characterAvatarKey(id, scope = characterScope) {
+        return isWorkshopScope(scope) ? `pf2_workshop_character_${id}_avatar` : `pf2_character_${id}_avatar`;
+    }
     function storageBackupKey(key) { return `${key}__backup`; }
 
     function parseStorageJSON(raw, fallback = null) {
@@ -5024,12 +5392,12 @@ ${getCleanFeatType(slot.type)}`;
         return fallback;
     }
 
-    function normalizeCharacterList(list) {
+    function normalizeCharacterList(list, scope = characterScope) {
         if (!Array.isArray(list)) return [];
         const used = new Set();
         return list
             .filter(ch => ch && ch.id && !used.has(String(ch.id)) && used.add(String(ch.id)))
-            .slice(0, MAX_CHARACTERS)
+            .slice(0, getCharacterLimit(scope))
             .map(ch => ({
                 id: String(ch.id),
                 name: String(ch.name || 'Герой'),
@@ -5039,18 +5407,18 @@ ${getCleanFeatType(slot.type)}`;
             }));
     }
 
-    function readCharacters() {
-        return normalizeCharacterList(readStorageJSONWithBackup(CHARACTERS_KEY, []));
+    function readCharacters(scope = characterScope) {
+        return normalizeCharacterList(readStorageJSONWithBackup(getCharactersKey(scope), []), scope);
     }
 
-    function writeCharacters() {
-        const ok = safeStorageSet(CHARACTERS_KEY, JSON.stringify(normalizeCharacterList(characters)));
+    function writeCharacters(scope = characterScope, list = characters) {
+        const ok = safeStorageSet(getCharactersKey(scope), JSON.stringify(normalizeCharacterList(list, scope)));
         if (!ok) showStorageErrorOnce('Не удалось сохранить список персонажей: хранилище браузера заполнено. Экспортируй важного персонажа в JSON.');
         return ok;
     }
 
-    function readCharacterSheet(id) {
-        const key = characterSheetKey(id);
+    function readCharacterSheet(id, scope = characterScope) {
+        const key = characterSheetKey(id, scope);
         const sheet = readStorageJSONWithBackup(key, null);
         if (sheet && sheet._characterId && String(sheet._characterId) !== String(id)) {
             const backup = parseStorageJSON(localStorage.getItem(storageBackupKey(key)), null);
@@ -5065,11 +5433,11 @@ ${getCleanFeatType(slot.type)}`;
         return sheet;
     }
 
-    function writeCharacterSheet(id, sheet) {
+    function writeCharacterSheet(id, sheet, scope = characterScope) {
         const safeSheet = sheet && typeof sheet === 'object'
             ? { ...sheet, _characterId: String(id), [LOCAL_SHEET_UPDATED_AT_KEY]: Number(sheet[LOCAL_SHEET_UPDATED_AT_KEY] || Date.now()) }
             : sheet;
-        const ok = safeStorageSet(characterSheetKey(id), JSON.stringify(safeSheet));
+        const ok = safeStorageSet(characterSheetKey(id, scope), JSON.stringify(safeSheet));
         if (!ok) showStorageErrorOnce('Не удалось сохранить лист: хранилище браузера заполнено. Экспортируй персонажа в JSON или освободи место.');
         return ok;
     }
@@ -5092,14 +5460,21 @@ ${getCleanFeatType(slot.type)}`;
 
     function getRoute() {
         const hash = window.location.hash || '';
+        if (hash.startsWith(ROUTE_WORKSHOP_CHARACTER_PREFIX)) {
+            return { view: 'workshop-character', id: decodeURIComponent(hash.slice(ROUTE_WORKSHOP_CHARACTER_PREFIX.length)) };
+        }
         if (hash.startsWith(ROUTE_CHARACTER_PREFIX)) {
             return { view: 'character', id: decodeURIComponent(hash.slice(ROUTE_CHARACTER_PREFIX.length)) };
         }
+        if (hash === ROUTE_WORKSHOP_HASH) return { view: 'workshop', id: null };
         return { view: 'menu', id: null };
     }
 
     function setRoute(view, id = null, replace = false) {
-        const hash = view === 'character' && id ? `${ROUTE_CHARACTER_PREFIX}${encodeURIComponent(id)}` : ROUTE_MENU_HASH;
+        let hash = ROUTE_MENU_HASH;
+        if (view === 'character' && id) hash = `${ROUTE_CHARACTER_PREFIX}${encodeURIComponent(id)}`;
+        else if (view === 'workshop-character' && id) hash = `${ROUTE_WORKSHOP_CHARACTER_PREFIX}${encodeURIComponent(id)}`;
+        else if (view === 'workshop') hash = ROUTE_WORKSHOP_HASH;
         const url = `${window.location.pathname}${window.location.search}${hash}`;
         const state = { pf2Route: true, view, id: id || null };
         try {
@@ -5111,12 +5486,971 @@ ${getCleanFeatType(slot.type)}`;
         }
     }
 
+    function isWorkshopEnabled() {
+        return localStorage.getItem(WORKSHOP_ENABLED_KEY) === 'true';
+    }
+
+    function setWorkshopEnabled(enabled) {
+        safeStorageSet(WORKSHOP_ENABLED_KEY, enabled ? 'true' : 'false', false);
+        document.body.classList.toggle('workshop-enabled', !!enabled);
+    }
+
+    function readWorkshopMenuTab() {
+        return localStorage.getItem(WORKSHOP_MENU_TAB_KEY) === 'battle' ? 'battle' : 'bestiary';
+    }
+
+    function writeWorkshopMenuTab(tab) {
+        workshopMenuTab = tab === 'battle' ? 'battle' : 'bestiary';
+        safeStorageSet(WORKSHOP_MENU_TAB_KEY, workshopMenuTab, false);
+    }
+
+    function clearCharacterMenuTransientState() {
+        characterDeleteSelectMode = false;
+        characterPendingDeleteIds.clear();
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
+        draggedCharacterIdx = null;
+        if (mobileReorderMode === 'characters') mobileReorderMode = null;
+        selectedMobileReorder = null;
+        suppressNextClickAfterReorder = false;
+    }
+
+    function syncCharacterScopeBody() {
+        document.body.classList.toggle('workshop-mode', isWorkshopScope());
+        document.body.classList.toggle('workshop-enabled', isWorkshopEnabled());
+        document.body.classList.toggle('workshop-sheet', isWorkshopSheetRestricted());
+        document.body.classList.toggle('battle-sheet-embed', isBattleSheetEmbed());
+        syncWorkshopSheetUI();
+    }
+
+    async function activateCharacterScope(scope = CHARACTER_SCOPE_MAIN) {
+        const nextScope = normalizeCharacterScope(scope);
+        if (nextScope === characterScope) {
+            characters = readCharacters();
+            syncCharacterScopeBody();
+            return;
+        }
+        if (activeCharacterId && String(activeCharacterId) === String(loadedSheetCharacterId) && normalizeCharacterScope(characterScope) === normalizeCharacterScope(loadedSheetScope)) {
+            saveCharacterSnapshotById(activeCharacterId, false);
+            await flushCloudSave();
+        }
+        characterScope = nextScope;
+        workshopMenuTab = readWorkshopMenuTab();
+        characters = readCharacters();
+        const savedActive = localStorage.getItem(getActiveCharacterKey());
+        activeCharacterId = savedActive && characters.some(ch => String(ch.id) === String(savedActive)) ? savedActive : null;
+        loadedSheetCharacterId = null;
+        loadedSheetScope = nextScope;
+        clearCharacterMenuTransientState();
+        syncCharacterScopeBody();
+    }
+
+    function startCharacterScopeTransition(direction = '') {
+        const menu = document.getElementById('characterMenu');
+        if (!menu || !direction) return;
+        menu.classList.remove('scope-transition-next', 'scope-transition-prev');
+        void menu.offsetWidth;
+        menu.classList.add(direction === 'prev' ? 'scope-transition-prev' : 'scope-transition-next');
+        setTimeout(() => menu.classList.remove('scope-transition-next', 'scope-transition-prev'), 430);
+    }
+
+    async function toggleCharacterScopeFromHeader(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!isWorkshopEnabled() && !isWorkshopScope()) return;
+        const nextScope = isWorkshopScope() ? CHARACTER_SCOPE_MAIN : CHARACTER_SCOPE_WORKSHOP;
+        const direction = nextScope === CHARACTER_SCOPE_WORKSHOP ? 'next' : 'prev';
+        await activateCharacterScope(nextScope);
+        document.body.classList.add('main-menu-open');
+        renderCharacterMenu(direction);
+        setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, false);
+    }
+
+    function switchWorkshopTab(tab, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!isWorkshopScope()) return;
+        writeWorkshopMenuTab(tab);
+        characterMenuOpenId = null;
+        characterToolbarMenuOpen = false;
+        cloudActionMenuOpen = false;
+        if (mobileReorderMode === 'characters') mobileReorderMode = null;
+        selectedMobileReorder = null;
+        renderCharacterMenu('next');
+    }
+
+    function getDefaultBattleState() {
+        return { participants: [], rollHeroes: false, started: false, round: 1, currentIndex: 0, initiativeRolled: false };
+    }
+
+    function getBattleState() {
+        const raw = readStorageJSONWithBackup(WORKSHOP_BATTLE_KEY, null);
+        const base = getDefaultBattleState();
+        const state = raw && typeof raw === 'object' ? { ...base, ...raw } : base;
+        const seen = new Set();
+        state.participants = Array.isArray(state.participants) ? state.participants
+            .filter(p => p && p.source && p.characterId)
+            .map(p => ({
+                key: `${p.source}:${p.characterId}`,
+                source: p.source === 'hero' ? 'hero' : 'bestiary',
+                characterId: String(p.characterId),
+                initiativeSkill: String(p.initiativeSkill || 'perc'),
+                initiative: Number.isFinite(parseInt(p.initiative)) ? parseInt(p.initiative) : null,
+                initiativeRoll: Number.isFinite(parseInt(p.initiativeRoll)) ? parseInt(p.initiativeRoll) : null,
+                pending: !!p.pending
+            }))
+            .filter(p => !seen.has(p.key) && seen.add(p.key)) : [];
+        state.rollHeroes = !!state.rollHeroes;
+        state.initiativeRolled = !!state.initiativeRolled;
+        state.started = !!state.started && state.participants.length > 0;
+        state.round = Math.max(1, parseInt(state.round) || 1);
+        state.currentIndex = Math.max(0, Math.min(state.participants.length - 1, parseInt(state.currentIndex) || 0));
+        return state;
+    }
+
+    function saveBattleState(state) {
+        safeStorageSet(WORKSHOP_BATTLE_KEY, JSON.stringify(state || getDefaultBattleState()), false);
+    }
+
+    function resetBattleTransientState() {
+        battleAddPanelOpen = false;
+        battlePendingAddKeys.clear();
+        battleReorderMode = false;
+        battleSelectedReorderIdx = null;
+        battleDraggedIdx = null;
+        battleTempParticipantKey = null;
+    }
+
+    function clearBattleParticipants(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const state = getBattleState();
+        const nextState = { ...getDefaultBattleState(), rollHeroes: !!state.rollHeroes };
+        resetBattleTransientState();
+        saveBattleState(nextState);
+        renderWorkshopBattleView();
+    }
+
+    function pruneBattleParticipantsByCharacterIds(ids, source = null) {
+        const idSet = new Set((Array.isArray(ids) ? ids : [ids]).map(id => String(id)).filter(Boolean));
+        if (!idSet.size) return false;
+        const state = getBattleState();
+        const beforeLength = state.participants.length;
+        state.participants = state.participants.filter(participant => {
+            if (source && participant.source !== source) return true;
+            return !idSet.has(String(participant.characterId));
+        });
+        if (state.participants.length === beforeLength) return false;
+        if (!state.participants.length) {
+            const nextState = { ...getDefaultBattleState(), rollHeroes: !!state.rollHeroes };
+            resetBattleTransientState();
+            saveBattleState(nextState);
+            return true;
+        }
+        if (state.currentIndex >= state.participants.length) state.currentIndex = 0;
+        if (battleTempParticipantKey && !state.participants.some(p => p.key === battleTempParticipantKey)) battleTempParticipantKey = null;
+        if (battleSelectedReorderIdx !== null && battleSelectedReorderIdx >= state.participants.length) battleSelectedReorderIdx = null;
+        saveBattleState(state);
+        return true;
+    }
+
+    function getBattleScopeFromSource(source) {
+        return source === 'hero' ? CHARACTER_SCOPE_MAIN : CHARACTER_SCOPE_WORKSHOP;
+    }
+
+    function getBattleParticipantKey(source, id) {
+        return `${source === 'hero' ? 'hero' : 'bestiary'}:${String(id)}`;
+    }
+
+    function getBattleRoster() {
+        const makeRows = (source, scope) => readCharacters(scope).map(ch => {
+            const sheet = readCharacterSheet(ch.id, scope);
+            const avatar = localStorage.getItem(characterAvatarKey(ch.id, scope)) || ch.avatar || '';
+            const hp = getBattleHPFromSheet(sheet, scope);
+            return {
+                source,
+                scope,
+                id: String(ch.id),
+                key: getBattleParticipantKey(source, ch.id),
+                name: String(sheet?.['in-name'] || ch.name || (source === 'hero' ? 'Герой' : 'Существо')).trim(),
+                avatar,
+                hp,
+                sheet
+            };
+        });
+        return {
+            heroes: makeRows('hero', CHARACTER_SCOPE_MAIN),
+            bestiary: makeRows('bestiary', CHARACTER_SCOPE_WORKSHOP)
+        };
+    }
+
+    function getBattleParticipantInfo(participant) {
+        if (!participant) return null;
+        const scope = getBattleScopeFromSource(participant.source);
+        const list = readCharacters(scope);
+        const ch = list.find(item => String(item.id) === String(participant.characterId));
+        if (!ch) return null;
+        const sheet = readCharacterSheet(ch.id, scope);
+        const avatar = localStorage.getItem(characterAvatarKey(ch.id, scope)) || ch.avatar || '';
+        return {
+            ...participant,
+            scope,
+            name: String(sheet?.['in-name'] || ch.name || (participant.source === 'hero' ? 'Герой' : 'Существо')).trim(),
+            avatar,
+            hp: getBattleHPFromSheet(sheet, scope),
+            sheet
+        };
+    }
+
+    function getBattleHPFromSheet(sheet, scope) {
+        if (isWorkshopScope(scope)) {
+            const max = Math.max(0, parseInt(sheet?.['in-hp-max'] ?? sheet?.['in-hp-cur']) || 0);
+            let cur = parseInt(sheet?.['in-hp-cur']);
+            if (!Number.isFinite(cur)) cur = max;
+            return { cur: Math.max(0, Math.min(max, cur)), max };
+        }
+        const lvl = Math.max(1, Math.min(20, parseInt(sheet?.['in-lvl']) || 1));
+        const con = parseInt(sheet?.abilities?.con) || 0;
+        const anc = parseInt(sheet?.['in-hp-anc']) || 0;
+        const cls = parseInt(sheet?.['in-hp-cls']) || 0;
+        const max = Math.max(0, anc + (cls + con) * lvl);
+        let cur = parseInt(sheet?.['in-hp-cur']);
+        if (!Number.isFinite(cur)) cur = max;
+        return { cur: Math.max(0, Math.min(max, cur)), max };
+    }
+
+    function getBattleHpColor(hp) {
+        const pct = hp?.max > 0 ? hp.cur / hp.max : 0;
+        if (pct <= 0.34) return 'var(--hp-red)';
+        if (pct <= 0.67) return 'var(--hp-gold)';
+        return 'var(--hp-green)';
+    }
+
+    function getBattleSkillAbilityKey(skillId) {
+        const key = String(skillId || '');
+        for (const info of Object.values(DATA_MAP)) {
+            if ((info.skills || []).includes(key)) return info.key;
+        }
+        if (key.startsWith('lore-')) return 'int';
+        return 'wis';
+    }
+
+    function getBattleInitiativeEntries(participant) {
+        const info = getBattleParticipantInfo(participant);
+        const sheet = info?.sheet || {};
+        const entries = [{ id: 'perc', label: 'Внимательность' }];
+        Object.values(DATA_MAP).forEach(group => {
+            (group.skills || []).forEach(label => entries.push({ id: label, label }));
+        });
+        for (let i = 1; i <= 3; i++) {
+            const lore = String(sheet?.lores?.[i] || '').trim();
+            if (lore) entries.push({ id: `lore-${i}`, label: lore });
+        }
+        return entries;
+    }
+
+    function getBattleInitiativeLabel(participant) {
+        const id = String(participant?.initiativeSkill || 'perc');
+        return getBattleInitiativeEntries(participant).find(entry => entry.id === id)?.label || 'Внимательность';
+    }
+
+    function getBattleInitiativeBonus(participant) {
+        const info = getBattleParticipantInfo(participant);
+        const sheet = info?.sheet || {};
+        const scope = info?.scope || CHARACTER_SCOPE_WORKSHOP;
+        const lvl = Math.max(isWorkshopScope(scope) ? -1 : 1, Math.min(20, parseInt(sheet?.['in-lvl']) || (isWorkshopScope(scope) ? 0 : 1)));
+        const abilitiesData = sheet.abilities || {};
+        const skillId = String(participant?.initiativeSkill || 'perc');
+        if (skillId === 'perc') {
+            if (sheet.saveBonuses && sheet.saveBonuses.perc !== undefined && sheet.saveBonuses.perc !== null && String(sheet.saveBonuses.perc).trim() !== '') {
+                return parseInt(sheet.saveBonuses.perc) || 0;
+            }
+            const rank = parseInt(sheet.saveProf?.perc) || 0;
+            return (parseInt(abilitiesData.wis) || 0) + (rank ? lvl + rank * 2 : 0);
+        }
+        const rank = parseInt(sheet.skillProf?.[skillId]) || 0;
+        const item = parseInt(sheet.itemBonuses?.[skillId]) || 0;
+        const abilityKey = getBattleSkillAbilityKey(skillId);
+        return (parseInt(abilitiesData[abilityKey]) || 0) + (rank ? lvl + rank * 2 : 0) + item;
+    }
+
+    function getBattleSheetUrl(participant) {
+        if (!participant) return '';
+        const hash = participant.source === 'hero'
+            ? `${ROUTE_CHARACTER_PREFIX}${encodeURIComponent(participant.characterId)}`
+            : `${ROUTE_WORKSHOP_CHARACTER_PREFIX}${encodeURIComponent(participant.characterId)}`;
+        const base = window.location.href.split('#')[0].split('?')[0];
+        return `${base}?battleSheet=1${hash}`;
+    }
+
+    function renderBattleAvatar(info) {
+        return info?.avatar ? `<img src="${info.avatar}" alt="">` : '<span class="avatar-silhouette"></span>';
+    }
+
+    function renderBattleParticipantCard(participant, idx, options = {}) {
+        const info = getBattleParticipantInfo(participant);
+        if (!info) return '';
+        const picked = battleReorderMode && battleSelectedReorderIdx === idx;
+        const current = options.currentKey && options.currentKey === participant.key;
+        const pending = participant.pending || participant.initiative === null || participant.initiative === undefined;
+        const shouldBlink = !!options.initiativeRolled && pending;
+        const initText = pending ? '...' : String(participant.initiative);
+        const click = battleReorderMode ? `battleReorderTap(${idx}, event)` : `handleBattleParticipantClick('${jsEscape(participant.key)}')`;
+        return `<div class="battle-participant-card ${picked ? 'reorder-picked' : ''} ${current ? 'current' : ''} ${shouldBlink ? 'pending' : ''}" draggable="${battleReorderMode ? 'true' : 'false'}" onclick="${click}" ondragstart="battleParticipantDragStart(event, ${idx})" ondragover="battleParticipantDragOver(event)" ondrop="battleParticipantDrop(event, ${idx})" ondragend="battleParticipantDragEnd(event)">
+            <button type="button" class="battle-remove-btn" onclick="removeBattleParticipant('${jsEscape(participant.key)}', event)" title="Убрать">×</button>
+            <button type="button" class="battle-avatar" onclick="openBattleInitiativePicker('${jsEscape(participant.key)}', event)" title="Инициатива: ${escapeHtml(getBattleInitiativeLabel(participant))}">${renderBattleAvatar(info)}</button>
+            <div class="battle-name">${escapeHtml(info.name)}</div>
+            <button type="button" class="battle-init" onclick="openBattleManualInitiativeModal('${jsEscape(participant.key)}', event)" title="Изменить инициативу">${escapeHtml(initText)}</button>
+        </div>`;
+    }
+
+    function renderBattleSourceList(title, rows, existingKeys) {
+        const available = rows.filter(row => !existingKeys.has(row.key));
+        if (!available.length) return '';
+        battlePendingAddKeys = battlePendingAddKeys instanceof Set ? battlePendingAddKeys : new Set();
+        return `<div class="battle-source-section"><div class="battle-source-title">${escapeHtml(title)}</div><div class="battle-source-grid">${available.map(row => {
+            const selected = battlePendingAddKeys.has(row.key);
+            return `<button type="button" class="battle-source-card ${selected ? 'add-select' : ''}" onclick="togglePendingBattleAdd('${row.source}', '${jsEscape(row.id)}', event)" title="${selected ? 'Убрать из выбора' : 'Выбрать в бой'}">
+                <span class="battle-source-avatar">${renderBattleAvatar(row)}</span>
+                <span>${escapeHtml(row.name)}</span>
+            </button>`;
+        }).join('')}</div></div>`;
+    }
+
+    function getBattleAvailableAddKeySet(roster, existingKeys) {
+        return new Set(roster.heroes.concat(roster.bestiary)
+            .filter(row => !existingKeys.has(row.key))
+            .map(row => row.key));
+    }
+
+    function pruneBattlePendingAddKeys(roster, existingKeys) {
+        battlePendingAddKeys = battlePendingAddKeys instanceof Set ? battlePendingAddKeys : new Set();
+        const availableKeys = getBattleAvailableAddKeySet(roster, existingKeys);
+        battlePendingAddKeys.forEach(key => {
+            if (!availableKeys.has(key)) battlePendingAddKeys.delete(key);
+        });
+    }
+
+    function parseBattleParticipantKey(key) {
+        const text = String(key || '');
+        const splitAt = text.indexOf(':');
+        const rawSource = splitAt >= 0 ? text.slice(0, splitAt) : '';
+        const id = splitAt >= 0 ? text.slice(splitAt + 1) : '';
+        return { source: rawSource === 'hero' ? 'hero' : 'bestiary', id };
+    }
+
+    function togglePendingBattleAdd(source, id, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        battlePendingAddKeys = battlePendingAddKeys instanceof Set ? battlePendingAddKeys : new Set();
+        const key = getBattleParticipantKey(source, id);
+        const state = getBattleState();
+        if (state.participants.some(p => p.key === key)) return;
+        if (battlePendingAddKeys.has(key)) battlePendingAddKeys.delete(key);
+        else battlePendingAddKeys.add(key);
+        renderWorkshopBattleView();
+    }
+
+    function confirmPendingBattleAdds(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        battlePendingAddKeys = battlePendingAddKeys instanceof Set ? battlePendingAddKeys : new Set();
+        const keys = Array.from(battlePendingAddKeys);
+        if (!keys.length) return;
+        const state = getBattleState();
+        const existingKeys = new Set(state.participants.map(p => p.key));
+        let added = 0;
+        keys.forEach(key => {
+            if (existingKeys.has(key)) return;
+            const parsed = parseBattleParticipantKey(key);
+            if (!parsed.id) return;
+            const normalizedKey = getBattleParticipantKey(parsed.source, parsed.id);
+            if (existingKeys.has(normalizedKey)) return;
+            state.participants.push({
+                key: normalizedKey,
+                source: parsed.source,
+                characterId: String(parsed.id),
+                initiativeSkill: 'perc',
+                initiative: null,
+                initiativeRoll: null,
+                pending: !!state.initiativeRolled
+            });
+            existingKeys.add(normalizedKey);
+            added += 1;
+        });
+        if (added) {
+            state.started = false;
+            saveBattleState(state);
+        }
+        battlePendingAddKeys.clear();
+        battleAddPanelOpen = false;
+        renderWorkshopBattleView();
+    }
+
+    function cancelPendingBattleAdds(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        battlePendingAddKeys.clear();
+        battleAddPanelOpen = false;
+        renderWorkshopBattleView();
+    }
+
+    function renderWorkshopBattleView() {
+        const root = document.getElementById('workshop-battle-view');
+        if (!root) return;
+        const state = getBattleState();
+        const infos = state.participants.map(getBattleParticipantInfo).filter(Boolean);
+        const existingKeys = new Set(state.participants.map(p => p.key));
+        const roster = getBattleRoster();
+        pruneBattlePendingAddKeys(roster, existingKeys);
+        const pendingAddCount = battlePendingAddKeys.size;
+        const hasAvailableToAdd = roster.heroes.concat(roster.bestiary).some(row => !existingKeys.has(row.key));
+        const current = state.started ? state.participants[state.currentIndex] : null;
+        const displayParticipant = battleTempParticipantKey
+            ? state.participants.find(p => p.key === battleTempParticipantKey)
+            : current;
+        const sourcePanel = battleAddPanelOpen ? `<div class="battle-add-panel">
+            <div class="battle-add-head">
+                <div><div class="battle-source-title">Добавить в бой</div><div class="battle-add-hint">Выдели одного или нескольких участников</div></div>
+                <div class="battle-add-head-actions">
+                    <button type="button" class="battle-btn primary" onclick="confirmPendingBattleAdds(event)" ${pendingAddCount ? '' : 'disabled'}>Добавить выбранных${pendingAddCount ? `: ${pendingAddCount}` : ''}</button>
+                    <button type="button" class="battle-btn" onclick="cancelPendingBattleAdds(event)">Отмена</button>
+                </div>
+            </div>
+            ${renderBattleSourceList('Бестиарий', roster.bestiary, existingKeys)}
+            ${renderBattleSourceList('Герои', roster.heroes, existingKeys)}
+            ${(!hasAvailableToAdd) ? '<div class="battle-empty">Некого добавить.</div>' : ''}
+        </div>` : '';
+        const pendingCount = state.participants.filter(p => p.initiative === null || p.initiative === undefined).length;
+        const canStart = state.participants.length > 0 && pendingCount === 0 && !state.started;
+        const initiativeFirst = state.started || state.participants.some(p => p.initiative !== null && p.initiative !== undefined);
+        const participantCards = state.participants
+            .map((p, idx) => renderBattleParticipantCard(p, idx, { currentKey: current?.key, initiativeRolled: state.initiativeRolled }))
+            .join('');
+        const participantsHtml = `<div class="battle-card-section">
+            ${participantCards ? `<div class="battle-group-title">Участники битвы</div><div class="battle-participants-grid">${participantCards}</div>` : ''}
+            ${!state.participants.length ? '<div class="battle-empty">Добавь участников битвы через плюс.</div>' : ''}
+        </div>`;
+        const turnHtml = state.started ? renderBattleTurnPanel(state, displayParticipant) : '';
+        const initiativeHtml = `<div class="battle-initiative-panel">
+            <div class="battle-initiative-head">
+                <button type="button" class="battle-btn primary" onclick="rollBattleInitiative()">Прокинуть инициативу</button>
+                <button type="button" class="battle-hero-roll ${state.rollHeroes ? 'active' : ''}" onclick="toggleBattleHeroRolls()" title="Бросать инициативу героям"></button>
+            </div>
+            ${canStart ? '<button type="button" class="battle-start-btn" onclick="startBattle()">НАЧАТЬ БОЙ</button>' : ''}
+        </div>`;
+        root.innerHTML = `<div class="battle-shell ${state.started ? 'started' : ''}">
+            <div class="battle-topbar">
+                <div><div class="battle-title">Участники битвы</div><div class="battle-subtitle">${state.participants.length} в бою</div></div>
+                <div class="battle-actions">
+                    ${battleAddPanelOpen && pendingAddCount ? '<button type="button" class="battle-icon-btn active" onclick="confirmPendingBattleAdds(event)" title="Добавить выбранных">✓</button>' : `<button type="button" class="battle-icon-btn ${battleAddPanelOpen ? 'active' : ''}" onclick="toggleBattleAddPanel()" title="${battleAddPanelOpen ? 'Закрыть добавление' : 'Добавить'}">${battleAddPanelOpen ? '×' : '+'}</button>`}
+                    <button type="button" class="battle-btn" onclick="toggleBattleReorderMode()">${battleReorderMode ? 'Готово' : 'Переместить'}</button>
+                    ${state.participants.length ? '<button type="button" class="battle-btn danger" onclick="clearBattleParticipants(event)">Очистить битву</button>' : ''}
+                    ${state.started ? `<button type="button" class="battle-btn danger" onclick="endBattle()">Закончить бой</button>` : ''}
+                </div>
+            </div>
+            ${sourcePanel}
+            ${initiativeFirst ? `${turnHtml}${initiativeHtml}${participantsHtml}` : `${participantsHtml}${initiativeHtml}`}
+        </div>`;
+        syncMobileReorderButtons();
+    }
+
+    function renderBattleTurnPanel(state, displayParticipant) {
+        const count = state.participants.length;
+        if (!count) return '';
+        const current = state.participants[state.currentIndex] || state.participants[0];
+        const makeTurnCard = (i, lane = '') => {
+            const p = state.participants[i];
+            const info = getBattleParticipantInfo(p);
+            if (!info) return '';
+            const hp = info.hp || { cur: 0, max: 0 };
+            const pct = hp.max > 0 ? Math.max(0, Math.min(100, (hp.cur / hp.max) * 100)) : 0;
+            const hpColor = getBattleHpColor(hp);
+            const currentClass = lane === 'center' ? 'current' : '';
+            return `<button type="button" class="battle-turn-card ${currentClass}" onclick="showBattleCurrentSheet()">
+                <span class="battle-turn-avatar">${renderBattleAvatar(info)}</span>
+                <span class="battle-turn-main"><span class="battle-turn-name">${escapeHtml(info.name)}</span><span class="battle-turn-hp"><i style="width:${pct}%; background:${hpColor}"></i></span></span>
+                <b>${escapeHtml(String(p.initiative ?? '...'))}</b>
+            </button>`;
+        };
+        const before = [-3, -2, -1].map(offset => (state.currentIndex + offset + count) % count).map(i => makeTurnCard(i, 'before')).join('');
+        const center = makeTurnCard(state.currentIndex, 'center');
+        const after = [1, 2, 3].map(offset => (state.currentIndex + offset + count) % count).map(i => makeTurnCard(i, 'after')).join('');
+        const src = getBattleSheetUrl(displayParticipant || current);
+        const tempInfo = displayParticipant && displayParticipant.key !== current.key ? getBattleParticipantInfo(displayParticipant) : null;
+        return `<div class="battle-live">
+            <div class="battle-left">
+                <div class="battle-round">Раунд ${state.round}</div>
+                <div class="battle-timeline">
+                    <div class="battle-turn-lane before">${before}</div>
+                    <div class="battle-turn-lane center">${center}</div>
+                    <div class="battle-turn-lane after">${after}</div>
+                </div>
+                <button type="button" class="battle-start-btn" onclick="nextBattleTurn()">ЗАКОНЧИТЬ ХОД</button>
+            </div>
+            <div class="battle-sheet-panel">
+                ${tempInfo ? `<button type="button" class="battle-sheet-close" onclick="closeBattleTempSheet()" title="Вернуться">×</button>` : ''}
+                ${src ? `<iframe class="battle-sheet-frame" src="${src}" title="Лист участника"></iframe>` : '<div class="battle-empty">Лист не выбран.</div>'}
+            </div>
+        </div>`;
+    }
+
+    function toggleBattleAddPanel() {
+        battleAddPanelOpen = !battleAddPanelOpen;
+        if (!battleAddPanelOpen) battlePendingAddKeys.clear();
+        if (battleAddPanelOpen) {
+            battleReorderMode = false;
+            battleSelectedReorderIdx = null;
+        }
+        renderWorkshopBattleView();
+    }
+
+    function addBattleParticipant(source, id) {
+        const state = getBattleState();
+        const key = getBattleParticipantKey(source, id);
+        if (!state.participants.some(p => p.key === key)) {
+            state.participants.push({ key, source: source === 'hero' ? 'hero' : 'bestiary', characterId: String(id), initiativeSkill: 'perc', initiative: null, initiativeRoll: null, pending: !!state.initiativeRolled });
+            state.started = false;
+            saveBattleState(state);
+        }
+        battleAddPanelOpen = false;
+        renderWorkshopBattleView();
+    }
+
+    function removeBattleParticipant(key, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const state = getBattleState();
+        state.participants = state.participants.filter(p => p.key !== key);
+        if (state.currentIndex >= state.participants.length) state.currentIndex = 0;
+        if (!state.participants.length) state.started = false;
+        if (battleTempParticipantKey === key) battleTempParticipantKey = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function openBattleInitiativePicker(key, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        if (!participant) return;
+        const info = getBattleParticipantInfo(participant);
+        const keyInput = document.getElementById('battle-initiative-key');
+        const title = document.getElementById('battle-initiative-title');
+        if (keyInput) keyInput.value = key;
+        if (title) title.innerText = info ? `Инициатива: ${info.name}` : 'Инициатива';
+        renderBattleInitiativeOptions(participant);
+        openModal('battleInitiativeModal');
+    }
+
+    function renderBattleInitiativeOptions(participant = null) {
+        const key = participant?.key || document.getElementById('battle-initiative-key')?.value || '';
+        const state = getBattleState();
+        const target = participant || state.participants.find(p => p.key === key);
+        const root = document.getElementById('battle-initiative-options');
+        if (!root || !target) return;
+        root.innerHTML = getBattleInitiativeEntries(target).map(entry => {
+            const checked = String(target.initiativeSkill || 'perc') === String(entry.id);
+            return `<label class="battle-choice-option">
+                <input type="checkbox" ${checked ? 'checked' : ''} onchange="selectBattleInitiativeSkill('${jsEscape(target.key)}', '${jsEscape(entry.id)}')">
+                <span>${escapeHtml(entry.label)}</span>
+            </label>`;
+        }).join('');
+    }
+
+    function selectBattleInitiativeSkill(key, skillId) {
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        if (!participant) return;
+        participant.initiativeSkill = String(skillId || 'perc');
+        saveBattleState(state);
+        renderBattleInitiativeOptions(participant);
+        renderWorkshopBattleView();
+    }
+
+    function handleBattleParticipantClick(key) {
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        if (!participant) return;
+        if (state.initiativeRolled && (participant.initiative === null || participant.initiative === undefined || participant.pending)) {
+            openBattleManualInitiativeModal(key);
+            return;
+        }
+        openBattleHpMenu(key);
+    }
+
+    function openBattleManualInitiativeModal(key, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        const info = getBattleParticipantInfo(participant);
+        if (!participant || !info) return;
+        const keyInput = document.getElementById('battle-manual-initiative-key');
+        const valueInput = document.getElementById('battle-manual-initiative-value');
+        const title = document.getElementById('battle-manual-initiative-title');
+        if (keyInput) keyInput.value = key;
+        if (valueInput) valueInput.value = participant.initiative ?? '';
+        if (title) title.innerText = `Инициатива: ${info.name}`;
+        openModal('battleManualInitiativeModal');
+        setTimeout(() => valueInput?.focus(), 0);
+    }
+
+    function saveBattleManualInitiative() {
+        const key = document.getElementById('battle-manual-initiative-key')?.value || '';
+        const value = parseInt(document.getElementById('battle-manual-initiative-value')?.value);
+        if (!Number.isFinite(value)) return;
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        if (!participant) return;
+        participant.initiative = value;
+        participant.initiativeRoll = null;
+        participant.pending = false;
+        const rolled = state.participants
+            .filter(p => !(p.initiative === null || p.initiative === undefined))
+            .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+        let rolledIdx = 0;
+        state.participants = state.participants.map(p => (p.initiative === null || p.initiative === undefined) ? p : rolled[rolledIdx++]);
+        state.currentIndex = Math.max(0, Math.min(state.currentIndex, state.participants.length - 1));
+        saveBattleState(state);
+        closeModal('battleManualInitiativeModal');
+        renderWorkshopBattleView();
+    }
+
+    function rollBattleInitiative() {
+        const state = getBattleState();
+        state.started = false;
+        state.initiativeRolled = true;
+        state.participants.forEach(participant => {
+            if (participant.source === 'hero' && !state.rollHeroes) {
+                participant.initiative = null;
+                participant.initiativeRoll = null;
+                participant.pending = true;
+                return;
+            }
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const bonus = getBattleInitiativeBonus(participant);
+            participant.initiative = d20 + bonus;
+            participant.initiativeRoll = d20;
+            participant.pending = false;
+        });
+        if (state.participants.some(p => p.initiative === null || p.initiative === undefined)) {
+            const ready = state.participants
+                .filter(p => !(p.initiative === null || p.initiative === undefined))
+                .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+            let readyIdx = 0;
+            state.participants = state.participants.map(p => (p.initiative === null || p.initiative === undefined) ? p : ready[readyIdx++]);
+        } else {
+            state.participants.sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+        }
+        state.currentIndex = 0;
+        state.round = 1;
+        saveBattleState(state);
+        appendDiceLog('<div class="dice-log-rest-content">Инициатива прокинута.</div>', 'var(--accent)', 'dice-log-rest');
+        renderWorkshopBattleView();
+    }
+
+    function toggleBattleHeroRolls() {
+        const state = getBattleState();
+        state.rollHeroes = !state.rollHeroes;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function startBattle() {
+        const state = getBattleState();
+        if (!state.participants.length || state.participants.some(p => p.initiative === null || p.initiative === undefined)) return;
+        state.participants.sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+        state.started = true;
+        state.round = 1;
+        state.currentIndex = 0;
+        battleTempParticipantKey = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function endBattle() {
+        const state = getBattleState();
+        state.started = false;
+        state.round = 1;
+        state.currentIndex = 0;
+        battleTempParticipantKey = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function nextBattleTurn() {
+        const state = getBattleState();
+        if (!state.started || !state.participants.length) return;
+        state.currentIndex += 1;
+        if (state.currentIndex >= state.participants.length) {
+            state.currentIndex = 0;
+            state.round += 1;
+        }
+        battleTempParticipantKey = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function openBattleHpMenu(key) {
+        if (battleReorderMode) return;
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        const info = getBattleParticipantInfo(participant);
+        if (!info) return;
+        document.getElementById('battle-hp-key').value = key;
+        document.getElementById('battle-hp-title').innerText = info.name;
+        document.getElementById('battle-hp-current').value = info.hp.cur;
+        document.getElementById('battle-hp-max').value = info.hp.max;
+        const maxInput = document.getElementById('battle-hp-max');
+        if (maxInput) maxInput.disabled = participant.source === 'hero';
+        clearBattleHpKeypad();
+        applyBattleHpKeypadState();
+        updateBattleHpPreview();
+        openModal('battleHpModal');
+    }
+
+    function applyBattleHpKeypadState() {
+        const shell = document.getElementById('battle-hp-keypad-shell');
+        const toggle = document.getElementById('battle-hp-keypad-toggle');
+        if (shell) shell.classList.toggle('open', !!battleHpKeypadOpen);
+        if (toggle) {
+            toggle.classList.toggle('active', !!battleHpKeypadOpen);
+            toggle.innerHTML = `⌨<span>${battleHpKeypadOpen ? '▲' : '▼'}</span>`;
+            toggle.title = battleHpKeypadOpen ? 'Свернуть клавиатуру' : 'Показать клавиатуру';
+        }
+    }
+
+    function toggleBattleHpKeypad() {
+        battleHpKeypadOpen = !battleHpKeypadOpen;
+        applyBattleHpKeypadState();
+    }
+
+    function updateBattleHpPreview() {
+        const curInput = document.getElementById('battle-hp-current');
+        const maxInput = document.getElementById('battle-hp-max');
+        const max = Math.max(0, parseInt(maxInput?.value) || 0);
+        let cur = Math.max(0, parseInt(curInput?.value) || 0);
+        cur = Math.min(max, cur);
+        if (curInput && String(curInput.value) !== String(cur)) curInput.value = cur;
+        const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
+        const fill = document.getElementById('battle-hp-fill-bar');
+        const nums = document.getElementById('battle-hp-numbers');
+        if (fill) {
+            fill.style.width = `${pct}%`;
+            fill.style.background = pct <= 34 ? 'var(--hp-red)' : (pct <= 67 ? 'var(--hp-gold)' : 'var(--hp-green)');
+        }
+        if (nums) nums.innerText = `${cur} / ${max}`;
+    }
+
+    function battleHpKeypadPress(value) {
+        const input = document.getElementById('battle-hp-calc');
+        if (!input) return;
+        input.value = `${input.value || ''}${value}`.replace(/^0+(\d)/, '$1').slice(0, 5);
+    }
+
+    function battleHpKeypadBackspace() {
+        const input = document.getElementById('battle-hp-calc');
+        if (input) input.value = String(input.value || '').slice(0, -1);
+    }
+
+    function clearBattleHpKeypad() {
+        const input = document.getElementById('battle-hp-calc');
+        if (input) input.value = '';
+    }
+
+    function applyBattleHpKeypad(dir) {
+        const input = document.getElementById('battle-hp-calc');
+        const curInput = document.getElementById('battle-hp-current');
+        const maxInput = document.getElementById('battle-hp-max');
+        const amount = Math.max(0, parseInt(input?.value) || 0);
+        if (!amount || !curInput) return;
+        const max = Math.max(0, parseInt(maxInput?.value) || 0);
+        const before = Math.max(0, parseInt(curInput.value) || 0);
+        const beforePct = max > 0 ? Math.max(0, Math.min(1, before / max)) : 0;
+        const after = dir < 0 ? Math.max(0, before - amount) : Math.min(max, before + amount);
+        const afterPct = max > 0 ? Math.max(0, Math.min(1, after / max)) : 0;
+        curInput.value = after;
+        clearBattleHpKeypad();
+        updateBattleHpPreview();
+        saveBattleHpModal(false);
+        animateBattleHpChange(dir < 0 ? 'damage' : 'heal', Math.abs(after - before) || amount, beforePct, afterPct);
+    }
+
+    function animateBattleHpChange(type, amount, fromPct, toPct) {
+        if (!amount) return;
+        const root = document.querySelector('.battle-hp-bars');
+        const track = document.getElementById('battle-hp-fill-bar')?.parentElement;
+        if (!root || !track) return;
+        const target = { root, track };
+        spawnHpFloat(target, type, amount);
+        const severity = Math.abs((fromPct || 0) - (toPct || 0));
+        const shakeClass = type === 'damage' && severity >= 0.5 ? 'hp-shake-medium' : (type === 'damage' && severity >= 0.25 ? 'hp-shake-light' : '');
+        if (shakeClass) restartHpAnimation(root, shakeClass, 520);
+        const color = type === 'heal' ? '#86efac' : '#fca5a5';
+        spawnHpTrailParticles(target, type, color, severity >= 0.5 ? 12 : 7, fromPct, toPct);
+    }
+
+    function saveBattleHpModal(closeAfter = true) {
+        const key = document.getElementById('battle-hp-key')?.value || '';
+        const state = getBattleState();
+        const participant = state.participants.find(p => p.key === key);
+        if (!participant) return;
+        const scope = getBattleScopeFromSource(participant.source);
+        const sheet = readCharacterSheet(participant.characterId, scope) || createBlankSheetData();
+        const max = Math.max(0, parseInt(document.getElementById('battle-hp-max')?.value) || 0);
+        const cur = Math.max(0, Math.min(max, parseInt(document.getElementById('battle-hp-current')?.value) || 0));
+        sheet['in-hp-cur'] = cur;
+        if (isWorkshopScope(scope)) sheet['in-hp-max'] = max;
+        writeCharacterSheet(participant.characterId, sheet, scope);
+        if (closeAfter) closeModal('battleHpModal');
+        renderWorkshopBattleView();
+    }
+
+    function openBattleSheetFromHp() {
+        const key = document.getElementById('battle-hp-key')?.value || '';
+        battleTempParticipantKey = key;
+        closeModal('battleHpModal');
+        renderWorkshopBattleView();
+    }
+
+    function closeBattleTempSheet() {
+        battleTempParticipantKey = null;
+        renderWorkshopBattleView();
+    }
+
+    function showBattleCurrentSheet() {
+        battleTempParticipantKey = null;
+        renderWorkshopBattleView();
+    }
+
+    function toggleBattleReorderMode() {
+        const state = getBattleState();
+        if (state.participants.length < 2) return;
+        battleReorderMode = !battleReorderMode;
+        battleSelectedReorderIdx = null;
+        renderWorkshopBattleView();
+    }
+
+    function battleReorderTap(idx, event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!battleReorderMode) return;
+        const state = getBattleState();
+        if (battleSelectedReorderIdx === null) {
+            battleSelectedReorderIdx = idx;
+            renderWorkshopBattleView();
+            return;
+        }
+        if (battleSelectedReorderIdx === idx) {
+            battleSelectedReorderIdx = null;
+            renderWorkshopBattleView();
+            return;
+        }
+        const item = state.participants.splice(battleSelectedReorderIdx, 1)[0];
+        state.participants.splice(Math.max(0, Math.min(idx, state.participants.length)), 0, item);
+        battleSelectedReorderIdx = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function battleParticipantDragStart(event, idx) {
+        if (!battleReorderMode) {
+            event.preventDefault();
+            return;
+        }
+        battleDraggedIdx = idx;
+        event.dataTransfer?.setData('text/plain', String(idx));
+    }
+
+    function battleParticipantDragOver(event) {
+        if (!battleReorderMode) return;
+        event.preventDefault();
+    }
+
+    function battleParticipantDrop(event, idx) {
+        if (!battleReorderMode) return;
+        event.preventDefault();
+        const state = getBattleState();
+        if (battleDraggedIdx === null || battleDraggedIdx === idx) return;
+        const item = state.participants.splice(battleDraggedIdx, 1)[0];
+        state.participants.splice(Math.max(0, Math.min(idx, state.participants.length)), 0, item);
+        battleDraggedIdx = null;
+        saveBattleState(state);
+        renderWorkshopBattleView();
+    }
+
+    function battleParticipantDragEnd() {
+        battleDraggedIdx = null;
+    }
+
+    function announceWorkshopSyncUnavailable(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        setAccountHeaderStatus('Синхронизация Мастерской\nПока не Возможна', { error: true, loading: false, autoHide: true, fadeAfter: 2600, clearAfter: 3400 });
+    }
+
+    function toggleAccountWorkshop(checked) {
+        setWorkshopEnabled(!!checked);
+        const toggle = document.getElementById('account-workshop-toggle');
+        const wrap = document.getElementById('account-workshop-wrap');
+        if (toggle) toggle.checked = !!checked;
+        if (wrap) wrap.classList.toggle('active', !!checked);
+        if (!checked && isWorkshopScope()) {
+            activateCharacterScope(CHARACTER_SCOPE_MAIN).then(() => {
+                renderCharacterMenu('prev');
+                setRoute('menu', null, true);
+            });
+            return;
+        }
+        renderCharacterMenu();
+    }
+
     async function applyRouteFromLocation(replace = false) {
         const route = getRoute();
-        if (route.view === 'character' && route.id && characters.some(ch => String(ch.id) === String(route.id))) {
-            await selectCharacter(route.id, { fromRoute: true, replaceRoute: replace });
+        if (route.view === 'workshop' && isWorkshopEnabled()) {
+            await openCharacterMenu({ fromRoute: true, replaceRoute: replace, scope: CHARACTER_SCOPE_WORKSHOP });
+        } else if (route.view === 'workshop-character' && route.id && isWorkshopEnabled()) {
+            await activateCharacterScope(CHARACTER_SCOPE_WORKSHOP);
+            if (characters.some(ch => String(ch.id) === String(route.id))) {
+                await selectCharacter(route.id, { fromRoute: true, replaceRoute: replace });
+            } else {
+                await openCharacterMenu({ fromRoute: true, replaceRoute: replace, scope: CHARACTER_SCOPE_WORKSHOP });
+            }
+        } else if (route.view === 'character' && route.id) {
+            await activateCharacterScope(CHARACTER_SCOPE_MAIN);
+            if (characters.some(ch => String(ch.id) === String(route.id))) {
+                await selectCharacter(route.id, { fromRoute: true, replaceRoute: replace });
+            } else {
+                await openCharacterMenu({ fromRoute: true, replaceRoute: replace, scope: CHARACTER_SCOPE_MAIN });
+            }
         } else {
-            await openCharacterMenu({ fromRoute: true, replaceRoute: replace });
+            await openCharacterMenu({ fromRoute: true, replaceRoute: replace, scope: CHARACTER_SCOPE_MAIN });
+            if (route.view === 'workshop' || route.view === 'workshop-character') setRoute('menu', null, true);
         }
         document.body.classList.remove('app-booting');
         appRouteReady = true;
@@ -5303,6 +6637,8 @@ ${getCleanFeatType(slot.type)}`;
         const actions = document.getElementById('cloud-action-buttons');
         const autoSyncToggle = document.getElementById('account-auto-sync-toggle');
         const autoSyncWrap = document.getElementById('account-auto-sync-wrap');
+        const workshopToggle = document.getElementById('account-workshop-toggle');
+        const workshopWrap = document.getElementById('account-workshop-wrap');
         const menuActions = document.getElementById('account-menu-actions');
         const logoutBtn = document.getElementById('account-logout-btn');
         const avatar = profile?.avatar || getDefaultProfileIcon();
@@ -5315,9 +6651,12 @@ ${getCleanFeatType(slot.type)}`;
             autoSyncToggle.disabled = !loggedIn;
         }
         if (autoSyncWrap) autoSyncWrap.style.display = loggedIn ? 'flex' : 'none';
+        if (workshopToggle) workshopToggle.checked = isWorkshopEnabled();
+        if (workshopWrap) workshopWrap.classList.toggle('active', isWorkshopEnabled());
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
         updateAccountSummary(message);
+        syncCharacterMenuModeUI();
     }
 
     function openAccountProfile() {
@@ -5411,13 +6750,17 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function clearLocalCharactersAfterLogout() {
-        if (activeCharacterId) saveAll(false);
-        readCharacters().forEach(ch => {
-            safeStorageRemove(characterSheetKey(ch.id));
-            safeStorageRemove(characterAvatarKey(ch.id));
+        if (!isWorkshopScope() && activeCharacterId) saveAll(false);
+        readCharacters(CHARACTER_SCOPE_MAIN).forEach(ch => {
+            safeStorageRemove(characterSheetKey(ch.id, CHARACTER_SCOPE_MAIN));
+            safeStorageRemove(characterAvatarKey(ch.id, CHARACTER_SCOPE_MAIN));
         });
-        characters = [];
-        activeCharacterId = null;
+        writeCharacters(CHARACTER_SCOPE_MAIN, []);
+        safeStorageRemove(ACTIVE_CHARACTER_KEY);
+        if (!isWorkshopScope()) {
+            characters = [];
+            activeCharacterId = null;
+        }
         characterDeleteSelectMode = false;
         characterPendingDeleteIds.clear();
         characterMenuOpenId = null;
@@ -5426,8 +6769,6 @@ ${getCleanFeatType(slot.type)}`;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         suppressNextClickAfterReorder = false;
-        writeCharacters();
-        safeStorageRemove(ACTIVE_CHARACTER_KEY);
     }
 
     async function logoutNicknameAccount() {
@@ -5623,11 +6964,11 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function buildAccountSnapshot() {
-        if (activeCharacterId) saveAll(false);
-        const list = readCharacters().slice(0, MAX_CHARACTERS);
+        if (!isWorkshopScope() && activeCharacterId) saveAll(false);
+        const list = readCharacters(CHARACTER_SCOPE_MAIN).slice(0, MAX_CHARACTERS);
         const snapshotCharacters = list.map((ch, index) => {
-            const sheet = normalizeLoadedSheet(readCharacterSheet(ch.id) || createBlankSheetData(ch.name || `Персонаж ${index + 1}`));
-            const avatar = localStorage.getItem(characterAvatarKey(ch.id)) || ch.avatar || '';
+            const sheet = normalizeLoadedSheet(readCharacterSheet(ch.id, CHARACTER_SCOPE_MAIN) || createBlankSheetData(ch.name || `Персонаж ${index + 1}`));
+            const avatar = localStorage.getItem(characterAvatarKey(ch.id, CHARACTER_SCOPE_MAIN)) || ch.avatar || '';
             return { id: String(ch.id || makeCharacterId()), sheet, avatar };
         });
         return {
@@ -5664,13 +7005,17 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function forcePersistCurrentAccountLocally() {
-        if (activeCharacterId) saveCharacterSnapshotById(activeCharacterId, false);
-        characters = readCharacters();
-        writeCharacters();
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+        if (!isWorkshopScope() && activeCharacterId) saveCharacterSnapshotById(activeCharacterId, false);
+        const mainCharacters = readCharacters(CHARACTER_SCOPE_MAIN);
+        writeCharacters(CHARACTER_SCOPE_MAIN, mainCharacters);
+        if (!isWorkshopScope()) safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
     }
 
     async function saveAccountToCloud(options = {}) {
+        if (isWorkshopScope() && !options.logout) {
+            announceWorkshopSyncUnavailable();
+            return false;
+        }
         if (!requireNicknameAccount()) return false;
         if (cloudLoading) return false;
         startCloudButtonAnimation(options.buttonId || '', options.direction || 'up');
@@ -5728,7 +7073,7 @@ ${getCleanFeatType(slot.type)}`;
                 return;
             }
             pendingCloudDownloadSnapshot = snapshot;
-            const hasLocalCharacters = readCharacters().length > 0;
+            const hasLocalCharacters = readCharacters(CHARACTER_SCOPE_MAIN).length > 0;
             if (hasLocalCharacters) openModal('cloudConfirmModal');
             else confirmCloudDownload(true);
         } finally {
@@ -5752,37 +7097,40 @@ ${getCleanFeatType(slot.type)}`;
 
     function applyCloudSnapshot(snapshot) {
         const previousLoadingState = isLoadingSheet;
-        const oldCharacters = readCharacters();
+        const oldCharacters = readCharacters(CHARACTER_SCOPE_MAIN);
         isLoadingSheet = true;
         try {
             oldCharacters.forEach(ch => {
-                safeStorageRemove(characterSheetKey(ch.id));
-                safeStorageRemove(characterAvatarKey(ch.id));
+                safeStorageRemove(characterSheetKey(ch.id, CHARACTER_SCOPE_MAIN));
+                safeStorageRemove(characterAvatarKey(ch.id, CHARACTER_SCOPE_MAIN));
             });
             const incoming = (snapshot.characters || []).slice(0, MAX_CHARACTERS);
-            characters = incoming.map((item, index) => {
+            const incomingCharacters = incoming.map((item, index) => {
                 const id = String(item.id || makeCharacterId());
                 const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData(`Персонаж ${index + 1}`));
                 sheet._characterId = id;
                 const avatar = item.avatar || '';
-                writeCharacterSheet(id, sheet);
-                if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
-                else safeStorageRemove(characterAvatarKey(id));
+                writeCharacterSheet(id, sheet, CHARACTER_SCOPE_MAIN);
+                if (avatar) safeStorageSet(characterAvatarKey(id, CHARACTER_SCOPE_MAIN), avatar, false);
+                else safeStorageRemove(characterAvatarKey(id, CHARACTER_SCOPE_MAIN));
                 return { id, ...getCharacterMetaFromSheet(sheet), updatedAt: Date.now() };
             });
             if (snapshot.profileAvatar && cloudUser) {
                 cloudUser.avatar = snapshot.profileAvatar;
                 writeAccountProfile(cloudUser);
             }
-            activeCharacterId = characters[0]?.id || null;
-            writeCharacters();
-            safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+            writeCharacters(CHARACTER_SCOPE_MAIN, incomingCharacters);
+            safeStorageSet(ACTIVE_CHARACTER_KEY, incomingCharacters[0]?.id || '', false);
+            if (!isWorkshopScope()) {
+                characters = incomingCharacters;
+                activeCharacterId = characters[0]?.id || null;
+            }
         } finally {
             isLoadingSheet = previousLoadingState;
         }
 
-        if (activeCharacterId) {
-            const activeSheet = readCharacterSheet(activeCharacterId) || createBlankSheetData();
+        if (!isWorkshopScope() && activeCharacterId) {
+            const activeSheet = readCharacterSheet(activeCharacterId, CHARACTER_SCOPE_MAIN) || createBlankSheetData();
             loadSheetData(activeSheet);
         }
         document.body.classList.add('main-menu-open');
@@ -5834,7 +7182,7 @@ ${getCleanFeatType(slot.type)}`;
         const defaultClassHP = 10;
         const defaultMaxHP = Math.max(0, defaultAncestryHP + (defaultClassHP + defaultCon) * defaultLevel);
         return {
-            skillProf: {}, saveProf: {}, heroPoints: 0, itemBonuses: {}, lores: { 1: '', 2: '', 3: '' },
+            skillProf: {}, saveProf: {}, saveBonuses: {}, heroPoints: 0, itemBonuses: {}, lores: { 1: '', 2: '', 3: '' }, workshopVisibleSkillIds: [],
             abilities: { str: 0, dex: 0, con: defaultCon, int: 0, wis: 0, cha: 0 },
             partialBoosts: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
             dyingLevel: 0, firstRun: true, attacks: [], attackTagsHiddenById: {}, attackNotes: '', attackQuickFeatIds: [],
@@ -5853,15 +7201,16 @@ ${getCleanFeatType(slot.type)}`;
             'persona-note-5': '', 'persona-note-6': '',
             'prof-languages': '',
             'in-name': name, 'in-anc': '', 'in-cls': '', 'in-lvl': defaultLevel, 'in-speed': 25, 'in-exp': 0,
-            'in-hp-cur': defaultMaxHP, 'in-hp-anc': defaultAncestryHP, 'in-hp-cls': defaultClassHP, 'in-wounds': 0,
+            'in-hp-cur': defaultMaxHP, 'in-hp-max': defaultMaxHP, 'in-hp-anc': defaultAncestryHP, 'in-hp-cls': defaultClassHP, 'in-wounds': 0,
             'in-ac-item': 0, 'in-ac-pen': 0, 'in-ac-cap': 0, 'in-ac-prof': 0,
+            'workshop-show-feats': false, 'workshop-show-personality': true, 'workshop-show-equipment': false,
             'use-magic': false, 'use-focus': false, 'focus-points-max': 1, 'has-shield': false, 'sh-bonus': 0, 'sh-hard': 0, 'sh-hp-max': 0, 'sh-hp-cur': 0,
             'shield-raised': false, 'use-shield-damage': false, 'hp-critical-damage': false
         };
     }
 
     function resetSheetRuntimeState() {
-        skillProf = {}; saveProf = { fort: 0, ref: 0, will: 0, perc: 0 };
+        skillProf = {}; saveProf = { fort: 0, ref: 0, will: 0, perc: 0 }; saveBonuses = {}; workshopVisibleSkillIds = [];
         lastMaxHP = 0;
         heroPoints = 0; itemBonuses = {}; lores = { 1: '', 2: '', 3: '' };
         abilities = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
@@ -5915,7 +7264,7 @@ ${getCleanFeatType(slot.type)}`;
             if (a?.tagsHidden) hiddenTagsSnapshot[a.id] = true;
         });
         normalizeSpellData();
-        const s = { skillProf, saveProf, heroPoints, itemBonuses, lores, abilities, partialBoosts, dyingLevel, firstRun, attacks: savedAttacks, attackTagsHiddenById: hiddenTagsSnapshot, attackNotes, attackQuickFeatIds, attackQuickFeatSelectionCustom, attackMapPenaltyCount, attackCourageCount, attackMapSettings, attackDcSettings: normalizeAttackDcSettings(attackDcSettings), proficiencies: normalizeProficiencies(proficiencies), spells, spellSlotsSpent, spellSettings: normalizeSpellSettings(spellSettings), lastDeathCheck, feats, myFeats, currentFeatTab, equipmentItems, equipmentBackpack, equipmentSettings, currentEquipmentTab, headerCollapsed, hpKeypadOpen, personalitySectionCollapsed };
+        const s = { skillProf, saveProf, saveBonuses, heroPoints, itemBonuses, lores, workshopVisibleSkillIds, abilities, partialBoosts, dyingLevel, firstRun, attacks: savedAttacks, attackTagsHiddenById: hiddenTagsSnapshot, attackNotes, attackQuickFeatIds, attackQuickFeatSelectionCustom, attackMapPenaltyCount, attackCourageCount, attackMapSettings, attackDcSettings: normalizeAttackDcSettings(attackDcSettings), proficiencies: normalizeProficiencies(proficiencies), spells, spellSlotsSpent, spellSettings: normalizeSpellSettings(spellSettings), lastDeathCheck, feats, myFeats, currentFeatTab, equipmentItems, equipmentBackpack, equipmentSettings, currentEquipmentTab, headerCollapsed, hpKeypadOpen, personalitySectionCollapsed };
         const ids = new Set();
         document.querySelectorAll('input, select, textarea').forEach(el => {
             if (!el.id || el.type === 'file' || ids.has(el.id)) return;
@@ -5942,16 +7291,23 @@ ${getCleanFeatType(slot.type)}`;
     }
 
 
-    function getCharacterMetaFromSheet(s) {
+    function getCharacterMetaFromSheet(s, scope = characterScope) {
         const name = String(s?.['in-name'] || '').trim() || 'Герой';
         const anc = String(s?.['in-anc'] || '').trim() || 'Народ';
         const cls = String(s?.['in-cls'] || '').trim() || 'Класс';
-        const lvl = clampLevel(s?.['in-lvl'] || 1);
+        const lvl = clampLevelForScope(s?.['in-lvl'] ?? (isWorkshopScope(scope) ? 0 : 1), scope);
         return { name, meta: `${anc} — ${cls} ${lvl}`, updatedAt: Date.now() };
     }
 
-    function getCharacterHPFromSheet(s) {
-        const lvl = clampLevel(s?.['in-lvl'] || 1);
+    function getCharacterHPFromSheet(s, scope = characterScope) {
+        if (isWorkshopScope(scope)) {
+            const max = Math.max(0, parseInt(s?.['in-hp-max'] ?? s?.['in-hp-cur']) || 0);
+            let cur = parseInt(s?.['in-hp-cur']);
+            if (!Number.isFinite(cur)) cur = max;
+            cur = Math.max(0, Math.min(max, cur));
+            return { cur, max };
+        }
+        const lvl = clampLevelForScope(s?.['in-lvl'] ?? 1, scope);
         const con = parseInt(s?.abilities?.con) || 0;
         const anc = parseInt(s?.['in-hp-anc']) || 0;
         const cls = parseInt(s?.['in-hp-cls']) || 0;
@@ -5976,7 +7332,7 @@ ${getCleanFeatType(slot.type)}`;
         const sheet = s || readCharacterSheet(id) || (String(id) === String(activeCharacterId) ? captureSheetState() : null);
         if (!sheet) return;
         const { avatar, ...rest } = characters[idx];
-        characters[idx] = { ...rest, ...getCharacterMetaFromSheet(sheet) };
+        characters[idx] = { ...rest, ...getCharacterMetaFromSheet(sheet, characterScope) };
         writeCharacters();
     }
 
@@ -5986,6 +7342,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function saveCharacterSnapshotById(id, shouldCalculate = false) {
         if (isLoadingSheet || !id) return null;
+        if (String(id) !== String(loadedSheetCharacterId) || normalizeCharacterScope(characterScope) !== normalizeCharacterScope(loadedSheetScope)) return null;
         const lvlEl = getPreferredField('in-lvl');
         if (lvlEl) setFieldValueAll('in-lvl', clampLevel(lvlEl.value));
         const s = captureSheetState();
@@ -5993,13 +7350,17 @@ ${getCleanFeatType(slot.type)}`;
         s[LOCAL_SHEET_UPDATED_AT_KEY] = Date.now();
         if (writeCharacterSheet(id, s)) {
             updateCharacterMetaById(id, s);
-            if (String(id) === String(activeCharacterId)) scheduleCloudSave(s);
+            if (!isWorkshopScope() && String(id) === String(activeCharacterId)) scheduleCloudSave(s);
         }
         if (shouldCalculate) calculate();
         return s;
     }
 
     function migrateCharacterStorage() {
+        if (isWorkshopScope()) {
+            characters = readCharacters();
+            return;
+        }
         characters = readCharacters();
         if (characters.length) return;
         const legacy = localStorage.getItem(LEGACY_SHEET_KEY);
@@ -6013,7 +7374,7 @@ ${getCleanFeatType(slot.type)}`;
         characters = [{ id, ...getCharacterMetaFromSheet(sheet) }];
         activeCharacterId = id;
         writeCharacters();
-        safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
+        safeStorageSet(getActiveCharacterKey(), id, false);
     }
 
     function getCharacterUploadIconHtml() {
@@ -6046,7 +7407,13 @@ ${getCleanFeatType(slot.type)}`;
 
     function renderCloudActionMenu() {
         const menu = document.getElementById('cloud-action-menu');
-        if (menu) menu.classList.toggle('active', !!cloudActionMenuOpen);
+        if (!menu) return;
+        if (isWorkshopScope()) {
+            menu.innerHTML = '<button type="button" class="cloud-menu-note workshop-sync-note" onclick="announceWorkshopSyncUnavailable(event)"><span>Синхронизация Мастерской</span><span>Пока не Возможна</span></button>';
+        } else {
+            menu.innerHTML = '<button type="button" onclick="handleCloudMenuSave(event)">В Облако</button><button type="button" onclick="handleCloudMenuLoad(event)">Из Облака</button>';
+        }
+        menu.classList.toggle('active', !!cloudActionMenuOpen);
     }
 
     function closeCloudActionMenu() {
@@ -6146,10 +7513,12 @@ ${getCleanFeatType(slot.type)}`;
     async function confirmPendingCharacterDeletes() {
         const ids = Array.from(characterPendingDeleteIds || []);
         if (!ids.length) return;
+        const deletedBattleSource = isWorkshopScope() ? 'bestiary' : 'hero';
         ids.forEach(id => {
             safeStorageRemove(characterSheetKey(id));
             safeStorageRemove(characterAvatarKey(id));
         });
+        pruneBattleParticipantsByCharacterIds(ids, deletedBattleSource);
         characters = characters.filter(ch => !characterPendingDeleteIds.has(String(ch.id)));
         if (activeCharacterId && characterPendingDeleteIds.has(String(activeCharacterId))) activeCharacterId = null;
         characterPendingDeleteIds.clear();
@@ -6160,16 +7529,57 @@ ${getCleanFeatType(slot.type)}`;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         writeCharacters();
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId || '', false);
+        safeStorageSet(getActiveCharacterKey(), activeCharacterId || '', false);
         renderCharacterMenu();
-        if (!characters.length || !activeCharacterId) setRoute('menu', null, true);
+        if (!characters.length || !activeCharacterId) setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, true);
     }
 
-    function renderCharacterMenu() {
+    function syncCharacterMenuModeUI() {
+        syncCharacterScopeBody();
+        const workshop = isWorkshopScope();
+        const workshopEnabled = isWorkshopEnabled();
+        const titleText = document.getElementById('character-menu-title-text');
+        const titlePrev = document.getElementById('character-scope-prev');
+        const titleNext = document.getElementById('character-scope-next');
+        const tabs = document.getElementById('workshop-tabs');
+        const bestiaryBtn = document.getElementById('workshop-tab-bestiary');
+        const battleBtn = document.getElementById('workshop-tab-battle');
+        const actions = document.getElementById('cloud-action-buttons');
+        document.body.classList.toggle('workshop-battle-mode', workshop && workshopMenuTab === 'battle');
+        if (titleText) titleText.innerText = workshop ? 'Мастерская' : 'Персонажи';
+        if (titlePrev) titlePrev.style.display = workshop ? 'inline-flex' : 'none';
+        if (titleNext) titleNext.style.display = (!workshop && workshopEnabled) ? 'inline-flex' : 'none';
+        if (tabs) tabs.style.display = workshop ? 'grid' : 'none';
+        if (bestiaryBtn) bestiaryBtn.classList.toggle('active', workshopMenuTab !== 'battle');
+        if (battleBtn) battleBtn.classList.toggle('active', workshopMenuTab === 'battle');
+        if (actions) actions.classList.toggle('active', !!(cloudUser || readAccountProfile()));
+        renderCloudActionMenu();
+    }
+
+    function renderCharacterMenu(transitionDirection = '') {
+        if (transitionDirection) startCharacterScopeTransition(transitionDirection);
+        syncCharacterMenuModeUI();
         const list = document.getElementById('character-list');
         const uploadBtn = document.getElementById('character-upload-btn');
         const countEl = document.getElementById('character-count');
+        const toolbar = document.querySelector('.character-menu-toolbar');
+        const battleView = document.getElementById('workshop-battle-view');
         if (!list) return;
+        const showBattle = isWorkshopScope() && workshopMenuTab === 'battle';
+        list.style.display = showBattle ? 'none' : '';
+        if (toolbar) toolbar.style.display = showBattle ? 'none' : 'flex';
+        if (battleView) battleView.style.display = showBattle ? 'block' : 'none';
+        if (showBattle) {
+            characterPendingDeleteIds.clear();
+            characterDeleteSelectMode = false;
+            characterMenuOpenId = null;
+            characterToolbarMenuOpen = false;
+            if (mobileReorderMode === 'characters') mobileReorderMode = null;
+            selectedMobileReorder = null;
+            renderWorkshopBattleView();
+            syncMobileReorderButtons();
+            return;
+        }
         renderCharacterToolbarMenu();
         characterPendingDeleteIds = characterPendingDeleteIds instanceof Set ? characterPendingDeleteIds : new Set();
         const existingIds = new Set(characters.map(ch => String(ch.id)));
@@ -6183,10 +7593,10 @@ ${getCleanFeatType(slot.type)}`;
             selectedMobileReorder = null;
         }
         if (characterMenuOpenId && !existingIds.has(String(characterMenuOpenId))) characterMenuOpenId = null;
-        if (countEl) countEl.innerText = `${characters.length}/${MAX_CHARACTERS}`;
+        const limit = getCharacterLimit();
+        if (countEl) countEl.innerText = `${characters.length}/${limit}`;
         if (uploadBtn) {
             const pendingDelete = characterPendingDeleteIds.size > 0;
-            const canAdd = characters.length < MAX_CHARACTERS;
             uploadBtn.disabled = false;
             uploadBtn.classList.toggle('delete-confirm', pendingDelete);
             uploadBtn.title = pendingDelete ? 'Удалить выбранных' : 'Меню JSON';
@@ -6196,7 +7606,7 @@ ${getCleanFeatType(slot.type)}`;
             renderCharacterToolbarMenu();
         }
         const reorderActive = mobileReorderMode === 'characters';
-        const addCardHtml = (!characterDeleteSelectMode && !reorderActive && characters.length < MAX_CHARACTERS)
+        const addCardHtml = (!characterDeleteSelectMode && !reorderActive && characters.length < limit)
             ? `<button type="button" class="character-add-card" onclick="addCharacter()" title="Добавить персонажа"><span class="character-add-avatar">+</span></button>`
             : '';
         if (!characters.length) {
@@ -6204,10 +7614,11 @@ ${getCleanFeatType(slot.type)}`;
             syncMobileReorderButtons();
             return;
         }
+        const workshopCards = isWorkshopScope();
         list.innerHTML = characters.map((ch, idx) => {
             const id = String(ch.id);
             const avatarData = localStorage.getItem(characterAvatarKey(id)) || ch.avatar || '';
-            const avatar = avatarData ? `<img src="${avatarData}" alt="">` : '👤';
+            const avatar = avatarData ? `<img src="${avatarData}" alt="">` : '<span class="avatar-silhouette"></span>';
             const picked = reorderActive && selectedMobileReorder && selectedMobileReorder.type === 'characters' && selectedMobileReorder.idx === idx;
             const pendingDelete = characterPendingDeleteIds.has(id);
             const cls = `${pendingDelete ? 'delete-select' : ''} ${picked ? 'reorder-picked' : ''}`.trim();
@@ -6216,12 +7627,15 @@ ${getCleanFeatType(slot.type)}`;
             const meta = sheet ? getCharacterMetaFromSheet(sheet) : { name: ch.name || 'Герой', meta: ch.meta || 'Народ — Класс 1' };
             const hp = sheet ? getCharacterHPFromSheet(sheet) : { cur: 0, max: 0 };
             const hpClass = getCharacterHPColorClass(hp);
+            const level = clampLevel(sheet?.['in-lvl'] ?? ch?.level ?? 1);
             const draggable = (!characterDeleteSelectMode && !reorderActive && window.innerWidth >= 1000) ? 'true' : 'false';
             const dragHandleClick = window.innerWidth < 1000 ? `handleCharacterDragHandleClick(event, ${idx})` : `event.stopPropagation()`;
             const dragHandleTitle = window.innerWidth < 1000 ? 'Нажми для перемещения' : 'Зажми и перетащи';
             const menuOpen = String(characterMenuOpenId || '') === id;
             const menuHtml = menuOpen ? `<div class="character-context-menu" onclick="event.stopPropagation()"><button type="button" onclick="exportCharacterJSON('${id}', event)">Скачать</button><button type="button" onclick="cloneCharacter('${id}', event)">Клонировать</button><button type="button" class="danger" onclick="queueCharacterDelete('${id}', event)">Удалить</button></div>` : '';
-            return `<div class="character-card ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div><div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div><div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions"><button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
+            const metaHtml = workshopCards ? '' : `<div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div>`;
+            const levelHtml = workshopCards ? `<div class="character-level">Ур. ${level}</div>` : '';
+            return `<div class="character-card ${workshopCards ? 'workshop-character-card' : ''} ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div>${metaHtml}<div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions">${levelHtml}<button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
         }).join('') + addCardHtml;
         syncMobileReorderButtons();
     }
@@ -6264,10 +7678,15 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     async function openCharacterMenu(options = {}) {
-        const { fromRoute = false, replaceRoute = false } = options || {};
+        const { fromRoute = false, replaceRoute = false, scope = characterScope } = options || {};
+        const leavingScope = characterScope;
         const leavingCharacterId = activeCharacterId;
         const shouldAutoSaveOnMenu = !!leavingCharacterId && !document.body.classList.contains('main-menu-open');
-        if (leavingCharacterId) {
+        const scopeChanged = normalizeCharacterScope(scope) !== characterScope;
+        if (scopeChanged) {
+            await activateCharacterScope(scope);
+        }
+        if (!scopeChanged && leavingCharacterId) {
             saveCharacterSnapshotById(leavingCharacterId, false);
             await flushCloudSave();
         }
@@ -6275,8 +7694,8 @@ ${getCleanFeatType(slot.type)}`;
         characterMenuOpenId = null;
         document.body.classList.add('main-menu-open');
         renderCharacterMenu();
-        if (!fromRoute) setRoute('menu', null, replaceRoute);
-        if (shouldAutoSaveOnMenu) maybeAutoSaveAccountOnMenu();
+        if (!fromRoute) setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, replaceRoute);
+        if (shouldAutoSaveOnMenu && !isWorkshopScope(leavingScope)) maybeAutoSaveAccountOnMenu();
     }
 
     function toggleCharacterDeleteMode() {
@@ -6289,8 +7708,9 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     async function addCharacter() {
-        if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+        const limit = getCharacterLimit();
+        if (characters.length >= limit) {
+            alert(`Пока можно создать не больше ${limit} персонажей.`);
             return;
         }
         if (activeCharacterId) saveAll(false);
@@ -6298,21 +7718,22 @@ ${getCleanFeatType(slot.type)}`;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         const sheet = createBlankSheetData('Новый герой');
-        const row = cloudUser ? await createCloudCharacter(sheet) : null;
+        const row = (!isWorkshopScope() && cloudUser) ? await createCloudCharacter(sheet) : null;
         const id = row?.id || makeCharacterId();
         writeCharacterSheet(id, sheet);
         characters.push(row ? cloudRowToCharacter(row) : { id, ...getCharacterMetaFromSheet(sheet) });
         writeCharacters();
         document.body.classList.add('main-menu-open');
-        setRoute('menu', null, true);
+        setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, true);
         renderCharacterMenu();
     }
 
     async function cloneCharacter(id, event = null) {
         if (event) event.stopPropagation();
         if (characterDeleteSelectMode) return;
-        if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+        const limit = getCharacterLimit();
+        if (characters.length >= limit) {
+            alert(`Пока можно создать не больше ${limit} персонажей.`);
             return;
         }
         if (activeCharacterId) saveAll(false);
@@ -6322,7 +7743,7 @@ ${getCleanFeatType(slot.type)}`;
         const baseName = String(sheet['in-name'] || source?.name || 'Герой').trim() || 'Герой';
         sheet['in-name'] = baseName;
         const avatar = localStorage.getItem(characterAvatarKey(id)) || source?.avatar || '';
-        const row = cloudUser ? await createCloudCharacter(sheet, avatar) : null;
+        const row = (!isWorkshopScope() && cloudUser) ? await createCloudCharacter(sheet, avatar) : null;
         const newId = row?.id || makeCharacterId();
         writeCharacterSheet(newId, sheet);
         if (avatar) safeStorageSet(characterAvatarKey(newId), avatar, false);
@@ -6351,7 +7772,7 @@ ${getCleanFeatType(slot.type)}`;
             await flushCloudSave();
         }
         activeCharacterId = id;
-        safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
+        safeStorageSet(getActiveCharacterKey(), id, false);
         characterDeleteSelectMode = false;
         if (mobileReorderMode === 'characters') {
             mobileReorderMode = null;
@@ -6359,7 +7780,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         document.body.classList.remove('main-menu-open');
         loadAll(false);
-        if (!fromRoute) setRoute('character', id, replaceRoute);
+        if (!fromRoute) setRoute(isWorkshopScope() ? 'workshop-character' : 'character', id, replaceRoute);
     }
 
     function loadSheetData(s) {
@@ -6367,7 +7788,9 @@ ${getCleanFeatType(slot.type)}`;
         resetSheetRuntimeState();
         s = normalizeLoadedSheet(s);
         Object.assign(skillProf, s.skillProf || {}); Object.assign(saveProf, s.saveProf || {});
-        heroPoints = s.heroPoints || 0; Object.assign(itemBonuses, s.itemBonuses || {});
+        saveBonuses = { ...(s.saveBonuses || {}) };
+        heroPoints = isWorkshopSheetRestricted() ? 0 : (s.heroPoints || 0); Object.assign(itemBonuses, s.itemBonuses || {});
+        workshopVisibleSkillIds = Array.isArray(s.workshopVisibleSkillIds) ? s.workshopVisibleSkillIds.map(String) : [];
         Object.assign(lores, s.lores || {}); Object.assign(abilities, s.abilities || {}); Object.assign(partialBoosts, s.partialBoosts || {});
         dyingLevel = s.dyingLevel || 0; firstRun = s.firstRun !== undefined ? s.firstRun : true;
         lastDeathCheck = s.lastDeathCheck || null; headerCollapsed = !!s.headerCollapsed; hpKeypadOpen = !!s.hpKeypadOpen;
@@ -6419,19 +7842,21 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function loadAll(showMenuOnReady = false) {
-        migrateCharacterStorage();
+        if (!isWorkshopScope()) migrateCharacterStorage();
         characters = readCharacters();
-        const savedActive = localStorage.getItem(ACTIVE_CHARACTER_KEY);
+        const savedActive = localStorage.getItem(getActiveCharacterKey());
         if (!activeCharacterId && savedActive && characters.some(ch => String(ch.id) === String(savedActive))) activeCharacterId = savedActive;
         if (!activeCharacterId || !characters.some(ch => String(ch.id) === String(activeCharacterId))) {
             activeCharacterId = characters[0]?.id || null;
         }
         if (!activeCharacterId) {
+            loadedSheetCharacterId = null;
+            loadedSheetScope = characterScope;
             document.body.classList.add('main-menu-open');
             renderCharacterMenu();
             return;
         }
-        safeStorageSet(ACTIVE_CHARACTER_KEY, activeCharacterId, false);
+        safeStorageSet(getActiveCharacterKey(), activeCharacterId, false);
         let sheet = null;
         sheet = readCharacterSheet(activeCharacterId);
         if (!sheet) {
@@ -6439,6 +7864,8 @@ ${getCleanFeatType(slot.type)}`;
             sheet._characterId = String(activeCharacterId);
             writeCharacterSheet(activeCharacterId, sheet);
         }
+        loadedSheetCharacterId = String(activeCharacterId);
+        loadedSheetScope = characterScope;
         loadSheetData(sheet);
         updateActiveCharacterMeta();
         renderCharacterMenu();
@@ -6462,15 +7889,16 @@ ${getCleanFeatType(slot.type)}`;
         if (activeCharacterId) {
             safeStorageSet(characterAvatarKey(activeCharacterId), dataUrl, false);
             updateActiveCharacterMeta();
-            scheduleCloudSave();
+            if (!isWorkshopScope()) scheduleCloudSave();
         }
         showAv(dataUrl);
         closeModal('cropModal');
     }
 
     function startImportCharacterAsNew() {
-        if (characters.length >= MAX_CHARACTERS) {
-            alert('Пока можно создать не больше 10 персонажей.');
+        const limit = getCharacterLimit();
+        if (characters.length >= limit) {
+            alert(`Пока можно создать не больше ${limit} персонажей.`);
             return;
         }
         characterDeleteSelectMode = false;
@@ -6541,11 +7969,11 @@ ${getCleanFeatType(slot.type)}`;
         }
         const bundle = {
             version: 3,
-            type: 'intlistpc_characters_bundle',
+            type: isWorkshopScope() ? 'intlistpc_workshop_bestiary_bundle' : 'intlistpc_characters_bundle',
             exportedAt: new Date().toISOString(),
             characters: list.map((ch, index) => buildCharacterExportItem(ch.id, index))
         };
-        downloadJSONFile(bundle, 'IntListPC_all_characters.json');
+        downloadJSONFile(bundle, isWorkshopScope() ? 'IntListPC_workshop_bestiary.json' : 'IntListPC_all_characters.json');
     }
 
     function readFileAsText(file) {
@@ -6578,8 +8006,9 @@ ${getCleanFeatType(slot.type)}`;
     function importCharacterItemsAsNew(items) {
         const cleanItems = (items || []).filter(item => item && item.sheet);
         if (!cleanItems.length) throw new Error('empty import');
-        if (characters.length + cleanItems.length > MAX_CHARACTERS) {
-            throw new Error(`Ошибка загрузки: после импорта будет больше ${MAX_CHARACTERS} персонажей.`);
+        const limit = getCharacterLimit();
+        if (characters.length + cleanItems.length > limit) {
+            throw new Error(`Ошибка загрузки: после импорта будет больше ${limit} персонажей.`);
         }
         if (activeCharacterId) saveAll(false);
         const added = [];
@@ -6602,7 +8031,7 @@ ${getCleanFeatType(slot.type)}`;
         mobileReorderMode = null;
         selectedMobileReorder = null;
         document.body.classList.add('main-menu-open');
-        setRoute('menu', null, true);
+        setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, true);
         renderCharacterMenu();
     }
 
@@ -6631,8 +8060,9 @@ ${getCleanFeatType(slot.type)}`;
             let id = activeCharacterId;
             let createdAsNew = false;
             if (!id) {
-                if (characters.length >= MAX_CHARACTERS) {
-                    alert('Пока можно создать не больше 10 персонажей.');
+                const limit = getCharacterLimit();
+                if (characters.length >= limit) {
+                    alert(`Пока можно создать не больше ${limit} персонажей.`);
                     return;
                 }
                 id = makeCharacterId();
@@ -6640,7 +8070,7 @@ ${getCleanFeatType(slot.type)}`;
                 createdAsNew = true;
             }
             activeCharacterId = id;
-            safeStorageSet(ACTIVE_CHARACTER_KEY, id, false);
+            safeStorageSet(getActiveCharacterKey(), id, false);
             writeCharacterSheet(id, sheet);
             if (avatar) safeStorageSet(characterAvatarKey(id), avatar, false);
             else safeStorageRemove(characterAvatarKey(id));
@@ -6653,8 +8083,8 @@ ${getCleanFeatType(slot.type)}`;
             closeModal('avatarMenuModal');
             document.body.classList.remove('main-menu-open');
             loadAll(false);
-            setRoute('character', id, true);
-            if (cloudUser && !createdAsNew) await saveCharacterToCloud(id, sheet);
+            setRoute(isWorkshopScope() ? 'workshop-character' : 'character', id, true);
+            if (!isWorkshopScope() && cloudUser && !createdAsNew) await saveCharacterToCloud(id, sheet);
         } catch (err) {
             alert(err?.message && /^Ошибка загрузки/.test(err.message) ? err.message : 'Не удалось загрузить JSON.');
         } finally {
@@ -6701,6 +8131,48 @@ ${getCleanFeatType(slot.type)}`;
         loginExistingNicknameAccount,
         logoutNicknameAccount,
         toggleAccountAutoSync,
+        toggleAccountWorkshop,
+        toggleCharacterScopeFromHeader,
+        switchWorkshopTab,
+        announceWorkshopSyncUnavailable,
+        toggleBattleAddPanel,
+        addBattleParticipant,
+        removeBattleParticipant,
+        openBattleInitiativePicker,
+        rollBattleInitiative,
+        toggleBattleHeroRolls,
+        startBattle,
+        endBattle,
+        nextBattleTurn,
+        handleBattleParticipantClick,
+        openBattleHpMenu,
+        saveBattleHpModal,
+        openBattleSheetFromHp,
+        closeBattleTempSheet,
+        showBattleCurrentSheet,
+        toggleBattleReorderMode,
+        renderBattleInitiativeOptions,
+        selectBattleInitiativeSkill,
+        openBattleManualInitiativeModal,
+        saveBattleManualInitiative,
+        toggleBattleHpKeypad,
+        applyBattleHpKeypadState,
+        updateBattleHpPreview,
+        battleHpKeypadPress,
+        battleHpKeypadBackspace,
+        clearBattleHpKeypad,
+        applyBattleHpKeypad,
+        battleReorderTap,
+        battleParticipantDragStart,
+        battleParticipantDragOver,
+        battleParticipantDrop,
+        battleParticipantDragEnd,
+        openWorkshopSkillsModal,
+        toggleWorkshopSkillVisibility,
+        openSaveBonusModal,
+        saveSaveBonusModal,
+        clearSaveBonusModal,
+        saveLevelInput,
         openProfileAvatarPicker,
         handleProfileAvatar,
         saveAccountToCloud,

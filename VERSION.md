@@ -1,6 +1,10 @@
 # IntListPC Version Notes
 
-Current version: `1.02`
+Current version: `1.03a`
+
+`1.03a` - Battle add panel now supports selecting several available heroes/creatures and adding them to combat in one confirmation.
+
+`1.03` - Added a battle clear button that removes all participants, and deleting a bestiary sheet now also removes that creature from battle participants.
 
 `1.01d` - Restored the old Inter typography from the earlier sheet and replaced the add-card text plus with a CSS-drawn plus so it stays centered on desktop and mobile.
 

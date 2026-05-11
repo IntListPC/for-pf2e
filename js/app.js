@@ -7,6 +7,9 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const WORKSHOP_ENABLED_KEY = 'pf2_workshop_enabled_v1';
     const WORKSHOP_MENU_TAB_KEY = 'pf2_workshop_menu_tab_v1';
     const WORKSHOP_BATTLE_KEY = 'pf2_workshop_battle_v1';
+    const WORKSHOP_BATTLE_SHEET_LAYOUT_KEY = 'pf2_workshop_battle_sheet_layout_primary_v6';
+    const WORKSHOP_BATTLE_SECONDARY_SHEET_LAYOUT_KEY = 'pf2_workshop_battle_sheet_layout_secondary_v1';
+    const WORKSHOP_BATTLE_SHEET_EDIT_KEY = 'pf2_workshop_battle_sheet_edit_v1';
     const CHARACTER_SCOPE_MAIN = 'characters';
     const CHARACTER_SCOPE_WORKSHOP = 'workshop';
     const MAX_CHARACTERS = 10;
@@ -323,6 +326,10 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         syncWorkshopSheetUI();
         requestAnimationFrame(updateAttackTagsOverflow);
         syncMobileReorderButtons();
+        requestAnimationFrame(() => {
+            const layout = getBattleSheetLayout();
+            if (layout.width > 0) applyBattleSheetLayout(layout, document.querySelector('.battle-sheet-panel'), true);
+        });
     });
 
     const DATA_MAP = {
@@ -532,6 +539,11 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
 
     function clampLevel(val) {
         return clampLevelForScope(val, characterScope);
+    }
+
+    function getEffectiveBonusLevel(lvl) {
+        const parsed = parseInt(lvl);
+        return Math.max(1, Number.isFinite(parsed) ? parsed : 1);
     }
 
     function saveLevelInput() {
@@ -1752,7 +1764,7 @@ ${getCleanFeatType(slot.type)}`;
     function getMagicSpellAttackValue(mods = null, lvl = getCurrentSheetLevel()) {
         spellSettings = normalizeSpellSettings(spellSettings);
         const statMod = mods ? (mods[spellSettings.stat] || 0) : (parseInt(document.getElementById(`score-${spellSettings.stat}`)?.value) || 0);
-        const profBonus = spellSettings.prof > 0 ? clampLevel(lvl) + spellSettings.prof * 2 : 0;
+        const profBonus = spellSettings.prof > 0 ? getEffectiveBonusLevel(clampLevel(lvl)) + spellSettings.prof * 2 : 0;
         return statMod + profBonus + (parseInt(spellSettings.item) || 0);
     }
 
@@ -3226,7 +3238,11 @@ ${getCleanFeatType(slot.type)}`;
 
     function renderSkill(s) {
         let [id, lbl] = s.includes('|') ? s.split('|') : [s, s];
-        return `<div class="skill-item"><div class="skill-name" id="name-${id}" data-label="${lbl}" onclick="openSkillModal('${id}', '${lbl}')">${lbl}</div><div style="display:flex;align-items:center;gap:8px"><div class="dot-container" data-skill-id="${id}"><div class="dot" onclick="setSkillProf('${id}', 1)"></div><div class="dot" onclick="setSkillProf('${id}', 2)"></div><div class="dot" onclick="setSkillProf('${id}', 3)"></div><div class="dot" onclick="setSkillProf('${id}', 4)"></div></div><div class="skill-roll-btn v" onclick="rollDice('${lbl}', this.innerText)" id="val-${id}">+0</div></div></div>`;
+        const safeId = escapeHtml(id);
+        const safeLabel = escapeHtml(lbl);
+        const jsId = jsEscape(id);
+        const jsLabel = jsEscape(lbl);
+        return `<div class="skill-item"><div class="skill-name" id="name-${safeId}" data-label="${safeLabel}" onclick="openSkillModal('${jsId}', '${jsLabel}')">${safeLabel}</div><div style="display:flex;align-items:center;gap:8px"><div class="dot-container" data-skill-id="${safeId}"><div class="dot" onclick="setSkillProf('${jsId}', 1)"></div><div class="dot" onclick="setSkillProf('${jsId}', 2)"></div><div class="dot" onclick="setSkillProf('${jsId}', 3)"></div><div class="dot" onclick="setSkillProf('${jsId}', 4)"></div></div><div class="skill-roll-btn v" onclick="rollDice('${jsLabel}', this.innerText)" id="val-${safeId}">+0</div></div></div>`;
     }
 
     function parseSkillEntry(s) {
@@ -3263,7 +3279,6 @@ ${getCleanFeatType(slot.type)}`;
         if (!restricted) return;
         const entries = getWorkshopSkillEntries();
         const entryById = new Map(entries.map(entry => [entry.id, entry]));
-        workshopVisibleSkillIds = workshopVisibleSkillIds.filter(id => entryById.has(id));
         const selected = workshopVisibleSkillIds.map(id => entryById.get(id)).filter(Boolean);
         const html = selected.length
             ? selected.map(entry => renderSkill(`${entry.id}|${entry.label}`)).join('')
@@ -3344,7 +3359,7 @@ ${getCleanFeatType(slot.type)}`;
     }
     function getProficiencyBonus(kind, key, lvl = clampLevel(document.getElementById('in-lvl')?.value || 1)) {
         const rank = getProficiencyRank(kind, key);
-        return rank > 0 ? lvl + rank * 2 : 0;
+        return rank > 0 ? getEffectiveBonusLevel(lvl) + rank * 2 : 0;
     }
     function getBestWeaponProficiencyBonus(lvl = clampLevel(document.getElementById('in-lvl')?.value || 1)) {
         return Math.max(...WEAPON_PROFICIENCY_TYPES.map(type => getProficiencyBonus('weapon', type.key, lvl)), 0);
@@ -3724,6 +3739,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function calculate() {
         let lvl = clampLevel(document.getElementById('in-lvl').value); document.getElementById('in-lvl').value = lvl;
+        const bonusLvl = getEffectiveBonusLevel(lvl);
         const mods = {};
         for (const info of Object.values(DATA_MAP)) {
             let val = abilities[info.key];
@@ -3741,7 +3757,7 @@ ${getCleanFeatType(slot.type)}`;
             const id = cont.dataset.skillId, p = skillProf[id] || 0;
             cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
             let mKey = ['Акробатика','Воровство','Скрытность'].includes(id) ? 'dex' : (['Общество','Мистицизм','Оккультизм','Ремесло'].includes(id) || id.includes('lore') ? 'int' : (['Медицина','Природа','Религия','Выживание'].includes(id) ? 'wis' : (['Обман','Дипломатия','Запугивание','Исполнение'].includes(id) ? 'cha' : 'str')));
-            const res = mods[mKey] + (p === 0 ? 0 : lvl + p * 2) + (itemBonuses[id] || 0) - (['str', 'dex'].includes(mKey) ? armorPen : 0);
+            const res = mods[mKey] + (p === 0 ? 0 : bonusLvl + p * 2) + (itemBonuses[id] || 0) - (['str', 'dex'].includes(mKey) ? armorPen : 0);
             document.querySelectorAll(`#val-${id}`).forEach(el => {
                 el.innerText = (res >= 0 ? '+' : '') + res;
             });
@@ -3751,7 +3767,7 @@ ${getCleanFeatType(slot.type)}`;
             const id = cont.dataset.save, p = saveProf[id] || 0;
             cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
             let mKey = id === 'fort' ? 'con' : (id === 'ref' ? 'dex' : 'wis');
-            const autoVal = mods[mKey] + (p === 0 ? 0 : lvl + p * 2);
+            const autoVal = mods[mKey] + (p === 0 ? 0 : bonusLvl + p * 2);
             const resVal = hasManualSaveBonus(id) ? getManualSaveBonus(id) : autoVal;
             document.querySelectorAll(`#val-${id}`).forEach(el => {
                 el.innerText = (resVal >= 0 ? '+' : '') + resVal;
@@ -5617,6 +5633,140 @@ ${getCleanFeatType(slot.type)}`;
         safeStorageSet(WORKSHOP_BATTLE_KEY, JSON.stringify(state || getDefaultBattleState()), false);
     }
 
+    function getDefaultBattleSheetLayout(slot = 'primary') {
+        return { width: 445, height: 750, x: 0, y: 0 };
+    }
+
+    function isBattleSheetEditEnabled() {
+        return localStorage.getItem(WORKSHOP_BATTLE_SHEET_EDIT_KEY) === '1';
+    }
+
+    function setBattleSheetEditEnabled(enabled) {
+        safeStorageSet(WORKSHOP_BATTLE_SHEET_EDIT_KEY, enabled ? '1' : '0', false);
+        renderWorkshopBattleView();
+    }
+
+    function getBattleSheetLayoutKey(slot = 'primary') {
+        return slot === 'secondary' ? WORKSHOP_BATTLE_SECONDARY_SHEET_LAYOUT_KEY : WORKSHOP_BATTLE_SHEET_LAYOUT_KEY;
+    }
+
+    function getBattleSheetLayout(slot = 'primary') {
+        const raw = readStorageJSONWithBackup(getBattleSheetLayoutKey(slot), null);
+        const base = getDefaultBattleSheetLayout(slot);
+        const layout = raw && typeof raw === 'object' ? { ...base, ...raw } : base;
+        return {
+            width: Math.max(0, parseInt(layout.width) || 0),
+            height: Math.max(420, parseInt(layout.height) || base.height),
+            x: parseInt(layout.x) || 0,
+            y: parseInt(layout.y) || 0
+        };
+    }
+
+    function getBattleSheetLayoutStyle(slot = 'primary') {
+        const layout = getBattleSheetLayout(slot);
+        const width = layout.width > 0 ? `${layout.width}px` : '100%';
+        return `--battle-sheet-width:${width};--battle-sheet-height:${layout.height}px;--battle-sheet-x:${layout.x}px;--battle-sheet-y:${layout.y}px;`;
+    }
+
+    function clampBattleSheetLayout(layout, panel = null, slot = 'primary') {
+        const root = document.querySelector('.battle-live');
+        const next = { ...getDefaultBattleSheetLayout(slot), ...(layout || {}) };
+        const minWidth = Math.min(360, Math.max(260, window.innerWidth - 24));
+        const minHeight = 420;
+        const rootRect = root?.getBoundingClientRect();
+        const maxWidth = rootRect ? Math.max(minWidth, rootRect.width - 12) : 1280;
+        const maxHeight = rootRect ? Math.max(minHeight, rootRect.height + 360) : 1400;
+        next.width = Math.max(minWidth, Math.min(maxWidth, parseInt(next.width) || minWidth));
+        next.height = Math.max(minHeight, Math.min(maxHeight, parseInt(next.height) || minHeight));
+        next.x = parseInt(next.x) || 0;
+        next.y = parseInt(next.y) || 0;
+        if (rootRect && panel) {
+            const panelRect = panel.getBoundingClientRect();
+            const currentX = parseInt(panel.style.getPropertyValue('--battle-sheet-x')) || 0;
+            const currentY = parseInt(panel.style.getPropertyValue('--battle-sheet-y')) || 0;
+            const baseLeft = panelRect.left - currentX;
+            const baseTop = panelRect.top - currentY;
+            const minX = Math.round(rootRect.left - baseLeft);
+            const maxX = Math.round(rootRect.right - baseLeft - next.width);
+            const minY = Math.round(rootRect.top - baseTop);
+            const maxY = Math.round(rootRect.bottom - baseTop - Math.min(next.height, rootRect.height));
+            next.x = minX <= maxX ? Math.max(minX, Math.min(maxX, next.x)) : 0;
+            next.y = minY <= maxY ? Math.max(minY, Math.min(maxY, next.y)) : 0;
+        }
+        return next;
+    }
+
+    function applyBattleSheetLayout(layout, panel = document.querySelector('.battle-sheet-panel'), persist = true) {
+        if (!panel) return;
+        const slot = panel.dataset.sheetSlot === 'secondary' ? 'secondary' : 'primary';
+        const next = clampBattleSheetLayout(layout, panel, slot);
+        panel.style.setProperty('--battle-sheet-width', `${next.width}px`);
+        panel.style.setProperty('--battle-sheet-height', `${next.height}px`);
+        panel.style.setProperty('--battle-sheet-x', `${next.x}px`);
+        panel.style.setProperty('--battle-sheet-y', `${next.y}px`);
+        if (persist) safeStorageSet(getBattleSheetLayoutKey(slot), JSON.stringify(next), false);
+    }
+
+    function startBattleSheetMove(event) {
+        startBattleSheetAdjust(event, 'move');
+    }
+
+    function startBattleSheetResize(event) {
+        startBattleSheetAdjust(event, 'resize');
+    }
+
+    function startBattleSheetAdjust(event, mode) {
+        const panel = event?.currentTarget?.closest?.('.battle-sheet-panel');
+        if (!panel || !isBattleSheetEditEnabled()) return;
+        if (mode === 'move' && panel.dataset.sheetSlot !== 'secondary') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = panel.getBoundingClientRect();
+        const slot = panel.dataset.sheetSlot === 'secondary' ? 'secondary' : 'primary';
+        const saved = getBattleSheetLayout(slot);
+        const start = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            x: saved.x,
+            y: saved.y,
+            width: saved.width || Math.round(rect.width),
+            height: saved.height || Math.round(rect.height)
+        };
+        panel.setPointerCapture?.(event.pointerId);
+        const move = e => {
+            const dx = e.clientX - start.clientX;
+            const dy = e.clientY - start.clientY;
+            const next = mode === 'resize'
+                ? { ...saved, width: start.width + dx, height: start.height + dy, x: start.x, y: start.y }
+                : { ...saved, width: start.width, height: start.height, x: start.x + dx, y: start.y + dy };
+            applyBattleSheetLayout(next, panel, false);
+        };
+        const up = e => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            panel.releasePointerCapture?.(event.pointerId);
+            const dx = e.clientX - start.clientX;
+            const dy = e.clientY - start.clientY;
+            const finalLayout = mode === 'resize'
+                ? { ...saved, width: start.width + dx, height: start.height + dy, x: start.x, y: start.y }
+                : { ...saved, width: start.width, height: start.height, x: start.x + dx, y: start.y + dy };
+            applyBattleSheetLayout(finalLayout, panel, true);
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+    }
+
+    function resetBattleSheetLayout(event = null) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const panel = event?.currentTarget?.closest?.('.battle-sheet-panel');
+        const slot = panel?.dataset?.sheetSlot === 'secondary' ? 'secondary' : 'primary';
+        safeStorageRemove(getBattleSheetLayoutKey(slot));
+        renderWorkshopBattleView();
+    }
+
     function resetBattleTransientState() {
         battleAddPanelOpen = false;
         battlePendingAddKeys.clear();
@@ -5766,6 +5916,7 @@ ${getCleanFeatType(slot.type)}`;
         const sheet = info?.sheet || {};
         const scope = info?.scope || CHARACTER_SCOPE_WORKSHOP;
         const lvl = Math.max(isWorkshopScope(scope) ? -1 : 1, Math.min(20, parseInt(sheet?.['in-lvl']) || (isWorkshopScope(scope) ? 0 : 1)));
+        const bonusLvl = getEffectiveBonusLevel(lvl);
         const abilitiesData = sheet.abilities || {};
         const skillId = String(participant?.initiativeSkill || 'perc');
         if (skillId === 'perc') {
@@ -5773,12 +5924,12 @@ ${getCleanFeatType(slot.type)}`;
                 return parseInt(sheet.saveBonuses.perc) || 0;
             }
             const rank = parseInt(sheet.saveProf?.perc) || 0;
-            return (parseInt(abilitiesData.wis) || 0) + (rank ? lvl + rank * 2 : 0);
+            return (parseInt(abilitiesData.wis) || 0) + (rank ? bonusLvl + rank * 2 : 0);
         }
         const rank = parseInt(sheet.skillProf?.[skillId]) || 0;
         const item = parseInt(sheet.itemBonuses?.[skillId]) || 0;
         const abilityKey = getBattleSkillAbilityKey(skillId);
-        return (parseInt(abilitiesData[abilityKey]) || 0) + (rank ? lvl + rank * 2 : 0) + item;
+        return (parseInt(abilitiesData[abilityKey]) || 0) + (rank ? bonusLvl + rank * 2 : 0) + item;
     }
 
     function getBattleSheetUrl(participant) {
@@ -5799,11 +5950,12 @@ ${getCleanFeatType(slot.type)}`;
         if (!info) return '';
         const picked = battleReorderMode && battleSelectedReorderIdx === idx;
         const current = options.currentKey && options.currentKey === participant.key;
+        const sheetSelected = options.selectedKey && options.selectedKey === participant.key;
         const pending = participant.pending || participant.initiative === null || participant.initiative === undefined;
         const shouldBlink = !!options.initiativeRolled && pending;
         const initText = pending ? '...' : String(participant.initiative);
         const click = battleReorderMode ? `battleReorderTap(${idx}, event)` : `handleBattleParticipantClick('${jsEscape(participant.key)}')`;
-        return `<div class="battle-participant-card ${picked ? 'reorder-picked' : ''} ${current ? 'current' : ''} ${shouldBlink ? 'pending' : ''}" draggable="${battleReorderMode ? 'true' : 'false'}" onclick="${click}" ondragstart="battleParticipantDragStart(event, ${idx})" ondragover="battleParticipantDragOver(event)" ondrop="battleParticipantDrop(event, ${idx})" ondragend="battleParticipantDragEnd(event)">
+        return `<div class="battle-participant-card ${picked ? 'reorder-picked' : ''} ${current ? 'current' : ''} ${sheetSelected ? 'sheet-selected' : ''} ${shouldBlink ? 'pending' : ''}" draggable="${battleReorderMode ? 'true' : 'false'}" onclick="${click}" ondragstart="battleParticipantDragStart(event, ${idx})" ondragover="battleParticipantDragOver(event)" ondrop="battleParticipantDrop(event, ${idx})" ondragend="battleParticipantDragEnd(event)">
             <button type="button" class="battle-remove-btn" onclick="removeBattleParticipant('${jsEscape(participant.key)}', event)" title="Убрать">×</button>
             <button type="button" class="battle-avatar" onclick="openBattleInitiativePicker('${jsEscape(participant.key)}', event)" title="Инициатива: ${escapeHtml(getBattleInitiativeLabel(participant))}">${renderBattleAvatar(info)}</button>
             <div class="battle-name">${escapeHtml(info.name)}</div>
@@ -5919,9 +6071,10 @@ ${getCleanFeatType(slot.type)}`;
         const pendingAddCount = battlePendingAddKeys.size;
         const hasAvailableToAdd = roster.heroes.concat(roster.bestiary).some(row => !existingKeys.has(row.key));
         const current = state.started ? state.participants[state.currentIndex] : null;
-        const displayParticipant = battleTempParticipantKey
+        const selectedParticipant = battleTempParticipantKey
             ? state.participants.find(p => p.key === battleTempParticipantKey)
-            : current;
+            : null;
+        const selectedSheetKey = selectedParticipant?.key || '';
         const sourcePanel = battleAddPanelOpen ? `<div class="battle-add-panel">
             <div class="battle-add-head">
                 <div><div class="battle-source-title">Добавить в бой</div><div class="battle-add-hint">Выдели одного или нескольких участников</div></div>
@@ -5938,13 +6091,13 @@ ${getCleanFeatType(slot.type)}`;
         const canStart = state.participants.length > 0 && pendingCount === 0 && !state.started;
         const initiativeFirst = state.started || state.participants.some(p => p.initiative !== null && p.initiative !== undefined);
         const participantCards = state.participants
-            .map((p, idx) => renderBattleParticipantCard(p, idx, { currentKey: current?.key, initiativeRolled: state.initiativeRolled }))
+            .map((p, idx) => renderBattleParticipantCard(p, idx, { currentKey: current?.key, selectedKey: selectedSheetKey, initiativeRolled: state.initiativeRolled }))
             .join('');
         const participantsHtml = `<div class="battle-card-section">
             ${participantCards ? `<div class="battle-group-title">Участники битвы</div><div class="battle-participants-grid">${participantCards}</div>` : ''}
             ${!state.participants.length ? '<div class="battle-empty">Добавь участников битвы через плюс.</div>' : ''}
         </div>`;
-        const turnHtml = state.started ? renderBattleTurnPanel(state, displayParticipant) : '';
+        const turnHtml = state.started ? renderBattleTurnPanel(state, selectedParticipant) : '';
         const initiativeHtml = `<div class="battle-initiative-panel">
             <div class="battle-initiative-head">
                 <button type="button" class="battle-btn primary" onclick="rollBattleInitiative()">Прокинуть инициативу</button>
@@ -5968,7 +6121,21 @@ ${getCleanFeatType(slot.type)}`;
         syncMobileReorderButtons();
     }
 
-    function renderBattleTurnPanel(state, displayParticipant) {
+    function renderBattleSheetPanel(participant, options = {}) {
+        const src = getBattleSheetUrl(participant);
+        const sheetEditEnabled = isBattleSheetEditEnabled();
+        const slot = options.slot === 'secondary' ? 'secondary' : 'primary';
+        const closeButton = options.closable
+            ? '<button type="button" class="battle-sheet-close" onclick="closeBattleTempSheet()" title="Вернуться">×</button>'
+            : '';
+        return `<div class="battle-sheet-panel ${sheetEditEnabled ? 'edit-enabled' : ''}" data-sheet-slot="${slot}" style="${getBattleSheetLayoutStyle(slot)}">
+            ${sheetEditEnabled ? `${slot === 'secondary' ? '<div class="battle-sheet-drag" onpointerdown="startBattleSheetMove(event)" title="Переместить окно"></div>' : ''}<button type="button" class="battle-sheet-reset" onclick="resetBattleSheetLayout(event)" title="Сбросить окно">↺</button><div class="battle-sheet-resize" onpointerdown="startBattleSheetResize(event)" title="Изменить размер окна"></div>` : ''}
+            ${closeButton}
+            ${src ? `<iframe class="battle-sheet-frame" src="${src}" title="${escapeHtml(options.title || 'Лист участника')}"></iframe>` : '<div class="battle-empty">Лист не выбран.</div>'}
+        </div>`;
+    }
+
+    function renderBattleTurnPanel(state, selectedParticipant) {
         const count = state.participants.length;
         if (!count) return '';
         const current = state.participants[state.currentIndex] || state.participants[0];
@@ -5989,8 +6156,10 @@ ${getCleanFeatType(slot.type)}`;
         const before = [-3, -2, -1].map(offset => (state.currentIndex + offset + count) % count).map(i => makeTurnCard(i, 'before')).join('');
         const center = makeTurnCard(state.currentIndex, 'center');
         const after = [1, 2, 3].map(offset => (state.currentIndex + offset + count) % count).map(i => makeTurnCard(i, 'after')).join('');
-        const src = getBattleSheetUrl(displayParticipant || current);
-        const tempInfo = displayParticipant && displayParticipant.key !== current.key ? getBattleParticipantInfo(displayParticipant) : null;
+        const secondary = selectedParticipant && selectedParticipant.key !== current.key ? selectedParticipant : null;
+        const sheetEditEnabled = isBattleSheetEditEnabled();
+        const primarySheet = renderBattleSheetPanel(current, { title: 'Лист текущего участника', slot: 'primary' });
+        const secondarySheet = secondary ? renderBattleSheetPanel(secondary, { title: 'Лист выбранного участника', closable: true, slot: 'secondary' }) : '';
         return `<div class="battle-live">
             <div class="battle-left">
                 <div class="battle-round">Раунд ${state.round}</div>
@@ -5999,11 +6168,17 @@ ${getCleanFeatType(slot.type)}`;
                     <div class="battle-turn-lane center">${center}</div>
                     <div class="battle-turn-lane after">${after}</div>
                 </div>
-                <button type="button" class="battle-start-btn" onclick="nextBattleTurn()">ЗАКОНЧИТЬ ХОД</button>
+                <div class="battle-turn-actions">
+                    <button type="button" class="battle-start-btn" onclick="nextBattleTurn()">ЗАКОНЧИТЬ ХОД</button>
+                    <label class="battle-sheet-edit-toggle ${sheetEditEnabled ? 'active' : ''}" title="Разрешить изменение окна">
+                        <input type="checkbox" ${sheetEditEnabled ? 'checked' : ''} onchange="setBattleSheetEditEnabled(this.checked)">
+                        <span>Изменения окна</span>
+                    </label>
+                </div>
             </div>
-            <div class="battle-sheet-panel">
-                ${tempInfo ? `<button type="button" class="battle-sheet-close" onclick="closeBattleTempSheet()" title="Вернуться">×</button>` : ''}
-                ${src ? `<iframe class="battle-sheet-frame" src="${src}" title="Лист участника"></iframe>` : '<div class="battle-empty">Лист не выбран.</div>'}
+            <div class="battle-sheets ${secondary ? 'dual' : ''} ${sheetEditEnabled ? 'edit-enabled' : ''}">
+                ${primarySheet}
+                ${secondarySheet}
             </div>
         </div>`;
     }
@@ -6092,6 +6267,12 @@ ${getCleanFeatType(slot.type)}`;
         if (!participant) return;
         if (state.initiativeRolled && (participant.initiative === null || participant.initiative === undefined || participant.pending)) {
             openBattleManualInitiativeModal(key);
+            return;
+        }
+        if (state.started) {
+            const current = state.participants[state.currentIndex] || null;
+            battleTempParticipantKey = current && current.key === key ? null : key;
+            renderWorkshopBattleView();
             return;
         }
         openBattleHpMenu(key);
@@ -6184,7 +6365,6 @@ ${getCleanFeatType(slot.type)}`;
         state.started = true;
         state.round = 1;
         state.currentIndex = 0;
-        battleTempParticipantKey = null;
         saveBattleState(state);
         renderWorkshopBattleView();
     }
@@ -6589,7 +6769,7 @@ ${getCleanFeatType(slot.type)}`;
         const syncStatus = document.getElementById('cloud-sync-status');
         const cleanMessage = String(message || '').trim();
         const errorText = isAccountErrorMessage(cleanMessage) ? cleanMessage : '';
-        if (headerName) headerName.innerText = profile?.nickname || 'Локальный профиль';
+        if (headerName) headerName.innerText = profile?.nickname || 'Лакал. Режим';
         if (errorText) {
             setAccountHeaderStatus(errorText, { error: true, loading: false, autoHide: false });
             setOptionalAccountText(modalInfo, errorText);
@@ -6601,7 +6781,7 @@ ${getCleanFeatType(slot.type)}`;
             }
             setOptionalAccountText(modalInfo, '');
         }
-        if (authStatus) authStatus.innerText = profile ? `Аккаунт: ${profile.nickname}` : 'Локальный профиль';
+        if (authStatus) authStatus.innerText = profile ? `Аккаунт: ${profile.nickname}` : 'Лакал. Режим';
         if (syncStatus) syncStatus.innerText = errorText;
     }
 
@@ -6644,7 +6824,7 @@ ${getCleanFeatType(slot.type)}`;
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
         if (avatarPreview) avatarPreview.src = avatar;
-        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || 'Локальный профиль';
+        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || 'Лакал. Режим';
         if (actions) actions.classList.toggle('active', loggedIn);
         if (autoSyncToggle) {
             autoSyncToggle.checked = !!profile?.autoSync;
@@ -8150,6 +8330,10 @@ ${getCleanFeatType(slot.type)}`;
         openBattleSheetFromHp,
         closeBattleTempSheet,
         showBattleCurrentSheet,
+        setBattleSheetEditEnabled,
+        startBattleSheetMove,
+        startBattleSheetResize,
+        resetBattleSheetLayout,
         toggleBattleReorderMode,
         renderBattleInitiativeOptions,
         selectBattleInitiativeSkill,

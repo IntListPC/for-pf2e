@@ -1,6 +1,22 @@
 # IntListPC Version Notes
 
-Current version: `1.03a`
+Current version: `1.03i`
+
+`1.03i` - Local account labels now show "Лакал. Режим" instead of "Локальный профиль".
+
+`1.03h` - Bestiary sheet headers now reserve the same HP-row height as character sheets, keeping the banner dimensions consistent.
+
+`1.03g` - Battle sheets now keep the current initiative sheet fixed next to the initiative list while an independently resizable secondary sheet opens to its right.
+
+`1.03f` - Clicking a battle participant during combat now opens a second persistent sheet beside the current initiative sheet instead of replacing it.
+
+`1.03e` - Battle sheet default window is now slightly narrower and shorter to match the requested screenshot proportions.
+
+`1.03d` - Battle sheet default height is slightly smaller and the "Изменения окна" checkbox now sits next to the end-turn button.
+
+`1.03c` - Battle sheet window now defaults to the requested compact height and only exposes move/resize/reset controls when the "Изменения окна" checkbox is enabled.
+
+`1.03b` - Bestiary skill display no longer drops saved skill selections during redraws; level -1 and 0 now use level 1 for proficiency-style bonuses; the battle sheet panel can be moved and resized with saved layout.
 
 `1.03a` - Battle add panel now supports selecting several available heroes/creatures and adding them to combat in one confirmation.
 

@@ -1459,6 +1459,13 @@ body.workshop-sheet #dying-ui {
 body.workshop-sheet .header-sub-row {
     justify-content: flex-start;
 }
+body.workshop-sheet .banner-hp-row {
+    min-height: 56px;
+    justify-content: center;
+}
+body.workshop-sheet .hp-main-line {
+    min-height: 36px;
+}
 body.workshop-sheet .attr-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas: none;
@@ -1956,6 +1963,11 @@ body.workshop-sheet .magic-spell-card.ritual {
     box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.34), 0 0 18px rgba(251, 191, 36, 0.22);
 }
 
+.battle-participant-card.sheet-selected {
+    border-color: rgba(16, 185, 129, 0.86);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.28), 0 0 16px rgba(16, 185, 129, 0.18);
+}
+
 .battle-participant-card.pending .battle-avatar {
     animation: battlePendingPulse 1s ease-in-out infinite;
 }
@@ -1975,6 +1987,8 @@ body.workshop-sheet .magic-spell-card.ritual {
     grid-template-columns: minmax(170px, 1fr) minmax(0, 3fr);
     gap: 12px;
     align-items: stretch;
+    position: relative;
+    overflow: visible;
 }
 
 .battle-left,
@@ -1985,6 +1999,18 @@ body.workshop-sheet .magic-spell-card.ritual {
     border-radius: 16px;
     padding: 12px;
     min-width: 0;
+}
+
+.battle-sheets {
+    display: flex;
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+    overflow: visible;
+}
+
+.battle-sheets.dual {
+    min-width: max-content;
 }
 
 .battle-round {
@@ -2000,6 +2026,17 @@ body.workshop-sheet .magic-spell-card.ritual {
     flex-direction: column;
     gap: 8px;
     margin-bottom: 12px;
+}
+
+.battle-turn-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.battle-turn-actions .battle-start-btn {
+    flex: 1 1 150px;
 }
 
 .battle-turn-lane {
@@ -2075,19 +2112,129 @@ body.workshop-sheet .magic-spell-card.ritual {
 }
 
 .battle-sheet-panel {
-    min-height: 780px;
+    width: var(--battle-sheet-width, 445px);
+    flex: 0 0 var(--battle-sheet-width, 445px);
+    height: var(--battle-sheet-height, 640px);
+    min-height: 420px;
     padding: 0;
     overflow: hidden;
+    justify-self: end;
+    transform: translate(var(--battle-sheet-x, 0), var(--battle-sheet-y, 0));
+    z-index: 1;
+}
+
+.battle-sheets.dual .battle-sheet-panel {
+    justify-self: end;
+}
+
+.battle-sheet-panel.edit-enabled {
+    touch-action: none;
 }
 
 .battle-sheet-frame {
     width: 121.952%;
     height: 121.952%;
-    min-height: 780px;
+    min-height: 100%;
     border: 0;
     background: #0f172a;
     transform: scale(0.82);
     transform-origin: top left;
+}
+
+.battle-sheet-drag {
+    position: absolute;
+    z-index: 4;
+    top: 8px;
+    left: 8px;
+    right: 92px;
+    height: 28px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.82), rgba(79, 124, 255, 0.14), rgba(15, 23, 42, 0.12));
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    cursor: move;
+}
+
+.battle-sheet-drag::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    width: 34px;
+    height: 8px;
+    transform: translateY(-50%);
+    background:
+        linear-gradient(rgba(219, 230, 255, 0.62), rgba(219, 230, 255, 0.62)) 0 0 / 34px 2px no-repeat,
+        linear-gradient(rgba(219, 230, 255, 0.42), rgba(219, 230, 255, 0.42)) 0 6px / 34px 2px no-repeat;
+}
+
+.battle-sheet-reset {
+    position: absolute;
+    z-index: 5;
+    top: 8px;
+    right: 48px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+    margin: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(79, 124, 255, 0.42);
+    background: rgba(15, 23, 42, 0.86);
+    color: #dbe6ff;
+    font-size: 17px;
+    line-height: 1;
+}
+
+.battle-sheet-edit-toggle {
+    min-height: 28px;
+    padding: 0 10px 0 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(79, 124, 255, 0.42);
+    background: rgba(15, 23, 42, 0.88);
+    color: #dbe6ff;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    font-weight: 950;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+}
+
+.battle-sheet-edit-toggle input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.battle-sheet-edit-toggle.active {
+    border-color: rgba(16, 185, 129, 0.72);
+    background: rgba(16, 185, 129, 0.16);
+    color: #bbf7d0;
+}
+
+.battle-sheet-resize {
+    position: absolute;
+    z-index: 5;
+    right: 0;
+    bottom: 0;
+    width: 28px;
+    height: 28px;
+    cursor: nwse-resize;
+}
+
+.battle-sheet-resize::after {
+    content: '';
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+    width: 14px;
+    height: 14px;
+    border-right: 2px solid rgba(219, 230, 255, 0.74);
+    border-bottom: 2px solid rgba(219, 230, 255, 0.74);
+    box-shadow: 5px 5px 0 -3px rgba(219, 230, 255, 0.44);
 }
 
 .battle-hp-bars {
@@ -2226,6 +2373,13 @@ body.battle-sheet-embed .feat-card {
     .battle-live {
         grid-template-columns: 1fr;
     }
+    .battle-sheets {
+        flex-direction: column;
+        min-width: 0;
+    }
+    .battle-sheets.dual {
+        min-width: 0;
+    }
     .battle-source-grid,
     .battle-participants-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2244,6 +2398,12 @@ body.battle-sheet-embed .feat-card {
     .battle-sheet-panel,
     .battle-sheet-frame {
         min-height: 520px;
+    }
+    .battle-sheet-panel {
+        width: 100%;
+        flex-basis: auto;
+        height: var(--battle-sheet-height, 640px);
+        transform: none;
     }
     .battle-sheet-frame {
         width: 100%;

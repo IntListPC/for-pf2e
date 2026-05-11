@@ -3208,7 +3208,7 @@ ${getCleanFeatType(slot.type)}`;
         saveAll(false);
     }
 
-    function init(showMenuOnReady = false) {
+    function renderAttributeCards() {
         let attrsHTML = '';
         for (const [name, info] of Object.entries(DATA_MAP)) {
             let skillsList = [...info.skills];
@@ -3217,6 +3217,10 @@ ${getCleanFeatType(slot.type)}`;
             attrsHTML += `<div class="attr-card" data-key="${info.key}" id="card-${info.key}"><div class="attr-head" onclick="openAbilityModal('${name}', '${info.key}')"><span>${name}</span><div style="display:flex;align-items:center;gap:8px"><div class="dot boost-dot" style="background:var(--hp-gold);display:${partialBoosts[info.key]?'block':'none'};width:8px;height:8px;border-radius:50%"></div><div class="attr-input v" id="disp-score-${info.key}">+0</div></div><input type="hidden" id="score-${info.key}" value="${abilities[info.key] ?? 0}"></div><div class="skills-container">${skillsHTML}</div></div>`;
         }
         document.querySelectorAll('#attr-list').forEach(root => { root.innerHTML = attrsHTML; });
+    }
+
+    function init(showMenuOnReady = false) {
+        renderAttributeCards();
 
         const leftPanel = document.getElementById('static-combat-page');
         const mainContent = document.getElementById('combat-page-content');
@@ -3270,6 +3274,54 @@ ${getCleanFeatType(slot.type)}`;
         return entries;
     }
 
+    function getSkillAbilityKey(skillId) {
+        const key = String(skillId || '');
+        for (const info of Object.values(DATA_MAP)) {
+            if ((info.skills || []).includes(key)) return info.key;
+        }
+        if (key.startsWith('lore-')) return 'int';
+        return 'str';
+    }
+
+    function syncSkillProficiencyDots() {
+        document.querySelectorAll('[data-skill-id]').forEach(cont => {
+            const id = cont.dataset.skillId;
+            const p = skillProf[id] || 0;
+            cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
+        });
+    }
+
+    function updateSkillDisplays(mods, bonusLvl, armorPen = 0) {
+        document.querySelectorAll('[data-skill-id]').forEach(cont => {
+            const id = cont.dataset.skillId;
+            const p = skillProf[id] || 0;
+            cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
+            const mKey = getSkillAbilityKey(id);
+            const res = (mods[mKey] || 0) + (p === 0 ? 0 : bonusLvl + p * 2) + (itemBonuses[id] || 0) - (['str', 'dex'].includes(mKey) ? armorPen : 0);
+            fieldElements(`val-${id}`).forEach(el => {
+                el.innerText = (res >= 0 ? '+' : '') + res;
+            });
+        });
+    }
+
+    function refreshSkillDisplaysFromState() {
+        const lvlEl = document.getElementById('in-lvl');
+        if (!lvlEl) {
+            syncSkillProficiencyDots();
+            return;
+        }
+        const lvl = clampLevel(lvlEl.value);
+        const mods = {};
+        for (const info of Object.values(DATA_MAP)) {
+            let val = abilities[info.key];
+            if (val === undefined) val = parseInt(document.getElementById(`score-${info.key}`)?.value) || 0;
+            mods[info.key] = val;
+        }
+        const armorForPenalty = getEquippedEquipmentItem('armor');
+        const armorPen = armorForPenalty ? Math.abs(parseInt(armorForPenalty.armor?.pen) || 0) : 0;
+        updateSkillDisplays(mods, getEffectiveBonusLevel(lvl), armorPen);
+    }
+
     function renderWorkshopSkillsPanel() {
         const restricted = isWorkshopSheetRestricted();
         const strips = document.querySelectorAll('#workshop-skills-strip');
@@ -3284,6 +3336,7 @@ ${getCleanFeatType(slot.type)}`;
             ? selected.map(entry => renderSkill(`${entry.id}|${entry.label}`)).join('')
             : '<div class="workshop-skills-empty">Нажми, чтобы выбрать навыки</div>';
         document.querySelectorAll('#workshop-skills-list').forEach(root => { root.innerHTML = html; });
+        refreshSkillDisplaysFromState();
     }
 
     function renderWorkshopSkillsOptions() {
@@ -3753,15 +3806,7 @@ ${getCleanFeatType(slot.type)}`;
         const armorForPenalty = getEquippedEquipmentItem('armor');
         let armorPen = armorForPenalty ? Math.abs(parseInt(armorForPenalty.armor?.pen) || 0) : 0;
 
-        document.querySelectorAll('[data-skill-id]').forEach(cont => {
-            const id = cont.dataset.skillId, p = skillProf[id] || 0;
-            cont.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i < p));
-            let mKey = ['Акробатика','Воровство','Скрытность'].includes(id) ? 'dex' : (['Общество','Мистицизм','Оккультизм','Ремесло'].includes(id) || id.includes('lore') ? 'int' : (['Медицина','Природа','Религия','Выживание'].includes(id) ? 'wis' : (['Обман','Дипломатия','Запугивание','Исполнение'].includes(id) ? 'cha' : 'str')));
-            const res = mods[mKey] + (p === 0 ? 0 : bonusLvl + p * 2) + (itemBonuses[id] || 0) - (['str', 'dex'].includes(mKey) ? armorPen : 0);
-            document.querySelectorAll(`#val-${id}`).forEach(el => {
-                el.innerText = (res >= 0 ? '+' : '') + res;
-            });
-        });
+        updateSkillDisplays(mods, bonusLvl, armorPen);
 
         document.querySelectorAll('[data-save]').forEach(cont => {
             const id = cont.dataset.save, p = saveProf[id] || 0;
@@ -5955,9 +6000,13 @@ ${getCleanFeatType(slot.type)}`;
         const shouldBlink = !!options.initiativeRolled && pending;
         const initText = pending ? '...' : String(participant.initiative);
         const click = battleReorderMode ? `battleReorderTap(${idx}, event)` : `handleBattleParticipantClick('${jsEscape(participant.key)}')`;
+        const avatarClick = options.started
+            ? `event.stopPropagation(); handleBattleParticipantClick('${jsEscape(participant.key)}')`
+            : `openBattleInitiativePicker('${jsEscape(participant.key)}', event)`;
+        const avatarTitle = options.started ? 'Открыть лист' : `Инициатива: ${escapeHtml(getBattleInitiativeLabel(participant))}`;
         return `<div class="battle-participant-card ${picked ? 'reorder-picked' : ''} ${current ? 'current' : ''} ${sheetSelected ? 'sheet-selected' : ''} ${shouldBlink ? 'pending' : ''}" draggable="${battleReorderMode ? 'true' : 'false'}" onclick="${click}" ondragstart="battleParticipantDragStart(event, ${idx})" ondragover="battleParticipantDragOver(event)" ondrop="battleParticipantDrop(event, ${idx})" ondragend="battleParticipantDragEnd(event)">
             <button type="button" class="battle-remove-btn" onclick="removeBattleParticipant('${jsEscape(participant.key)}', event)" title="Убрать">×</button>
-            <button type="button" class="battle-avatar" onclick="openBattleInitiativePicker('${jsEscape(participant.key)}', event)" title="Инициатива: ${escapeHtml(getBattleInitiativeLabel(participant))}">${renderBattleAvatar(info)}</button>
+            <button type="button" class="battle-avatar" onclick="${avatarClick}" title="${avatarTitle}">${renderBattleAvatar(info)}</button>
             <div class="battle-name">${escapeHtml(info.name)}</div>
             <button type="button" class="battle-init" onclick="openBattleManualInitiativeModal('${jsEscape(participant.key)}', event)" title="Изменить инициативу">${escapeHtml(initText)}</button>
         </div>`;
@@ -6091,14 +6140,14 @@ ${getCleanFeatType(slot.type)}`;
         const canStart = state.participants.length > 0 && pendingCount === 0 && !state.started;
         const initiativeFirst = state.started || state.participants.some(p => p.initiative !== null && p.initiative !== undefined);
         const participantCards = state.participants
-            .map((p, idx) => renderBattleParticipantCard(p, idx, { currentKey: current?.key, selectedKey: selectedSheetKey, initiativeRolled: state.initiativeRolled }))
+            .map((p, idx) => renderBattleParticipantCard(p, idx, { currentKey: current?.key, selectedKey: selectedSheetKey, initiativeRolled: state.initiativeRolled, started: state.started }))
             .join('');
         const participantsHtml = `<div class="battle-card-section">
             ${participantCards ? `<div class="battle-group-title">Участники битвы</div><div class="battle-participants-grid">${participantCards}</div>` : ''}
             ${!state.participants.length ? '<div class="battle-empty">Добавь участников битвы через плюс.</div>' : ''}
         </div>`;
         const turnHtml = state.started ? renderBattleTurnPanel(state, selectedParticipant) : '';
-        const initiativeHtml = `<div class="battle-initiative-panel">
+        const initiativeHtml = state.started ? '' : `<div class="battle-initiative-panel">
             <div class="battle-initiative-head">
                 <button type="button" class="battle-btn primary" onclick="rollBattleInitiative()">Прокинуть инициативу</button>
                 <button type="button" class="battle-hero-roll ${state.rollHeroes ? 'active' : ''}" onclick="toggleBattleHeroRolls()" title="Бросать инициативу героям"></button>
@@ -6225,6 +6274,7 @@ ${getCleanFeatType(slot.type)}`;
             event.stopPropagation();
         }
         const state = getBattleState();
+        if (state.started) return;
         const participant = state.participants.find(p => p.key === key);
         if (!participant) return;
         const info = getBattleParticipantInfo(participant);
@@ -7972,6 +8022,7 @@ ${getCleanFeatType(slot.type)}`;
         heroPoints = isWorkshopSheetRestricted() ? 0 : (s.heroPoints || 0); Object.assign(itemBonuses, s.itemBonuses || {});
         workshopVisibleSkillIds = Array.isArray(s.workshopVisibleSkillIds) ? s.workshopVisibleSkillIds.map(String) : [];
         Object.assign(lores, s.lores || {}); Object.assign(abilities, s.abilities || {}); Object.assign(partialBoosts, s.partialBoosts || {});
+        renderAttributeCards();
         dyingLevel = s.dyingLevel || 0; firstRun = s.firstRun !== undefined ? s.firstRun : true;
         lastDeathCheck = s.lastDeathCheck || null; headerCollapsed = !!s.headerCollapsed; hpKeypadOpen = !!s.hpKeypadOpen;
         personalitySectionCollapsed = { origin: false, personality: false, proficiency: false, ...(s.personalitySectionCollapsed || {}) };

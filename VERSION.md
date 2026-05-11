@@ -1,6 +1,8 @@
 # IntListPC Version Notes
 
-Current version: `1.03i`
+Current version: `1.03j`
+
+`1.03j` - After combat starts, initiative setup controls and avatar initiative pickers are hidden; bestiary and character skill displays now refresh their saved proficiency dots and lore/intelligence entries immediately.
 
 `1.03i` - Local account labels now show "Лакал. Режим" instead of "Локальный профиль".
 

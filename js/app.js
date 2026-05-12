@@ -3667,6 +3667,45 @@ ${getCleanFeatType(slot.type)}`;
         return Math.max(0, anc + (cls + con) * lvl);
     }
 
+    function getCurrentTempHP() {
+        return Math.max(0, parseInt(document.getElementById('in-hp-temp')?.value) || 0);
+    }
+
+    function clampTempHPInput() {
+        const hpEl = document.getElementById('in-hp-temp');
+        if (!hpEl) return 0;
+        let temp = parseInt(hpEl.value);
+        if (!Number.isFinite(temp) || temp < 0) temp = 0;
+        hpEl.value = temp;
+        hpEl.min = 0;
+        return temp;
+    }
+
+    function setCurrentTempHP(value) {
+        const hpEl = document.getElementById('in-hp-temp');
+        if (!hpEl) return 0;
+        hpEl.value = Math.max(0, parseInt(value) || 0);
+        return clampTempHPInput();
+    }
+
+    function getHpBarSegments(cur, max, temp = 0) {
+        const safeMax = Math.max(0, parseInt(max) || 0);
+        const safeCur = Math.max(0, Math.min(safeMax, parseInt(cur) || 0));
+        const safeTemp = Math.max(0, parseInt(temp) || 0);
+        const total = safeCur + safeTemp;
+        const denom = Math.max(1, safeMax, total);
+        const curPct = (safeCur / denom) * 100;
+        const tempPct = (safeTemp / denom) * 100;
+        return { curPct, tempPct, tempLeftPct: curPct, total, denom };
+    }
+
+    function applyTempHpBar(fill, leftPct, widthPct) {
+        if (!fill) return;
+        const active = widthPct > 0;
+        fill.style.left = `${active ? leftPct : 0}%`;
+        fill.style.width = `${active ? widthPct : 0}%`;
+    }
+
     function clampCurrentHPInput() {
         const hpEl = document.getElementById('in-hp-cur');
         if (!hpEl) return;
@@ -3953,6 +3992,7 @@ ${getCleanFeatType(slot.type)}`;
         
         lastMaxHP = currentMaxHP;
         curHP = Math.min(currentMaxHP, Math.max(0, curHP));
+        const tempHP = clampTempHPInput();
         const hpCurInput = document.getElementById('in-hp-cur');
         if (hpCurInput) {
             hpCurInput.value = curHP;
@@ -3960,24 +4000,30 @@ ${getCleanFeatType(slot.type)}`;
             hpCurInput.min = 0;
         }
 
+        const hpBar = getHpBarSegments(curHP, currentMaxHP, tempHP);
         const hpPct = currentMaxHP > 0 ? (curHP / currentMaxHP) : 0;
         const hpColor = hpPct <= 0.34 ? 'var(--hp-red)' : (hpPct <= 0.67 ? 'var(--hp-gold)' : 'var(--hp-green)');
-        document.getElementById('hp-fill-bar').style.width = (hpPct * 100) + '%';
+        document.getElementById('hp-fill-bar').style.width = hpBar.curPct + '%';
         document.getElementById('hp-fill-bar').style.background = hpColor;
-        const hpIsZero = curHP <= 0;
+        applyTempHpBar(document.getElementById('hp-temp-fill-bar'), hpBar.tempLeftPct, hpBar.tempPct);
+        const hpIsZero = (curHP + tempHP) <= 0;
         const dispHp = document.getElementById('disp-hp');
-        if (dispHp) dispHp.innerText = `${hpIsZero ? '💀 ' : ''}${curHP} / ${currentMaxHP} оз`;
+        if (dispHp) dispHp.innerText = `${hpIsZero ? '💀 ' : ''}${curHP + tempHP} / ${currentMaxHP} оз`;
         const bannerHpRow = document.querySelector('.banner-hp-row');
         if (bannerHpRow) bannerHpRow.classList.toggle('hp-zero', hpIsZero);
         const hpModalBars = document.querySelector('.hp-modal-bars');
         if (hpModalBars) hpModalBars.classList.toggle('hp-zero', hpIsZero);
         const hpModalNumbers = document.getElementById('hp-modal-numbers');
         const hpModalFill = document.getElementById('hp-modal-fill-bar');
-        if (hpModalNumbers) hpModalNumbers.innerText = `${hpIsZero ? '💀 ' : ''}${curHP} / ${currentMaxHP}`;
+        const hpModalTempFill = document.getElementById('hp-modal-temp-fill-bar');
+        if (hpModalNumbers) hpModalNumbers.innerText = tempHP > 0
+            ? `${hpIsZero ? '💀 ' : ''}${curHP + tempHP} / ${currentMaxHP} (+${tempHP})`
+            : `${hpIsZero ? '💀 ' : ''}${curHP} / ${currentMaxHP}`;
         if (hpModalFill) {
-            hpModalFill.style.width = (hpPct * 100) + '%';
+            hpModalFill.style.width = hpBar.curPct + '%';
             hpModalFill.style.background = hpColor;
         }
+        applyTempHpBar(hpModalTempFill, hpBar.tempLeftPct, hpBar.tempPct);
         applyHpKeypadState();
 
         const exp = parseInt(document.getElementById('in-exp').value) || 0;
@@ -4027,7 +4073,7 @@ ${getCleanFeatType(slot.type)}`;
         renderPersonalitySections();
         
         const dyingUi = document.getElementById('dying-ui');
-        if (dyingUi) dyingUi.style.display = (!isWorkshopSheetRestricted() && curHP <= 0 && dyingLevel > 0) ? 'block' : 'none';
+        if (dyingUi) dyingUi.style.display = (!isWorkshopSheetRestricted() && hpIsZero && dyingLevel > 0) ? 'block' : 'none';
         updateDyingDots();
 
         renderAttackMapBar();
@@ -4170,7 +4216,7 @@ ${getCleanFeatType(slot.type)}`;
         if (!el || !amount) return;
         const node = document.createElement('div');
         node.className = `hp-float-number ${type}`;
-        node.textContent = `${type === 'heal' ? '+' : '-'}${amount}`;
+        node.textContent = `${type === 'damage' ? '-' : '+'}${amount}`;
         el.appendChild(node);
         setTimeout(() => node.remove(), 950);
     }
@@ -4220,15 +4266,17 @@ ${getCleanFeatType(slot.type)}`;
         if (!amount || amount <= 0) return;
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const targets = getHpEffectTargets();
-        const color = type === 'heal'
-            ? '#86efac'
-            : (getComputedStyle(document.getElementById('hp-fill-bar') || document.documentElement).backgroundColor || '#fca5a5');
+        const color = type === 'temp'
+            ? '#67c7d7'
+            : (type === 'heal'
+                ? '#86efac'
+                : (getComputedStyle(document.getElementById('hp-fill-bar') || document.documentElement).backgroundColor || '#fca5a5'));
 
         targets.forEach(target => spawnHpFloat(target, type, amount));
         if (reduceMotion) return;
 
         let shakeClass = '';
-        let particles = type === 'heal' ? 6 : 4;
+        let particles = type === 'heal' || type === 'temp' ? 6 : 4;
         if (severityRatio >= 1) { shakeClass = type === 'damage' ? 'hp-shake-heavy' : ''; particles = 16; }
         else if (severityRatio >= 0.5) { shakeClass = type === 'damage' ? 'hp-shake-medium' : ''; particles = 12; }
         else if (severityRatio >= 0.25) { shakeClass = type === 'damage' ? 'hp-shake-light' : ''; particles = 8; }
@@ -4265,28 +4313,49 @@ ${getCleanFeatType(slot.type)}`;
     function modHP(dir) {
         const hpCalcEl = document.getElementById('hp-calc-val');
         const hpCurEl = document.getElementById('in-hp-cur');
+        const hpTempEl = document.getElementById('in-hp-temp');
         let rawVal = parseInt(hpCalcEl?.value) || 0;
         if (rawVal <= 0 || !hpCurEl) return;
 
         let cur = parseInt(hpCurEl.value) || 0;
+        let temp = Math.max(0, parseInt(hpTempEl?.value) || 0);
         const currentMaxHP = getCurrentMaxHP();
-        const hpBefore = cur;
-        const hpPctBefore = currentMaxHP > 0 ? clampPct01(hpBefore / currentMaxHP) : 0;
+        const hpBefore = cur + temp;
+        const hpBeforeBar = getHpBarSegments(cur, currentMaxHP, temp);
+        const hpPctBefore = clampPct01(hpBeforeBar.total / hpBeforeBar.denom);
         let animationAmount = rawVal;
         let severityRatio = currentMaxHP > 0 ? rawVal / currentMaxHP : 0;
         let shieldDamageAnimation = null;
 
+        if (dir === 2) {
+            setCurrentTempHP(rawVal);
+            const hpAfterTemp = getCurrentTempHP();
+            const hpAfterBar = getHpBarSegments(cur, currentMaxHP, hpAfterTemp);
+            if (hpCalcEl) hpCalcEl.value = '';
+            saveAll();
+            updateHpKeypadDisplay();
+            animateHpChange('temp', rawVal, 0, hpPctBefore, clampPct01(hpAfterBar.total / hpAfterBar.denom));
+            return;
+        }
+
         if (isWorkshopSheetRestricted()) {
-            hpCurEl.value = dir === -1
-                ? Math.max(0, cur - rawVal)
-                : Math.min(currentMaxHP, cur + rawVal);
+            if (dir === -1) {
+                const tempAbsorb = Math.min(temp, rawVal);
+                if (tempAbsorb > 0) temp = setCurrentTempHP(temp - tempAbsorb);
+                const hpDamage = rawVal - tempAbsorb;
+                hpCurEl.value = Math.max(0, cur - hpDamage);
+            } else {
+                hpCurEl.value = Math.min(currentMaxHP, cur + rawVal);
+            }
             const hpAfter = parseInt(hpCurEl.value) || 0;
-            const hpPctAfter = currentMaxHP > 0 ? clampPct01(hpAfter / currentMaxHP) : 0;
+            const hpTempAfter = getCurrentTempHP();
+            const hpAfterBar = getHpBarSegments(hpAfter, currentMaxHP, hpTempAfter);
+            const hpPctAfter = clampPct01(hpAfterBar.total / hpAfterBar.denom);
             if (hpCalcEl) hpCalcEl.value = '';
             clampCurrentHPInput();
             saveAll();
             updateHpKeypadDisplay();
-            animateHpChange(dir === -1 ? 'damage' : 'heal', Math.abs(hpAfter - hpBefore) || rawVal, dir === -1 ? severityRatio : 0, hpPctBefore, hpPctAfter);
+            animateHpChange(dir === -1 ? 'damage' : 'heal', rawVal, dir === -1 ? severityRatio : 0, hpPctBefore, hpPctAfter);
             return;
         }
 
@@ -4294,10 +4363,19 @@ ${getCleanFeatType(slot.type)}`;
             let incomingDamage = Math.max(0, rawVal);
             const wasCritDamage = !!document.getElementById('hp-critical-damage')?.checked;
             let effectiveDamage = incomingDamage;
-            const massiveDeathLimit = cur + currentMaxHP;
+            const massiveDeathLimit = cur + temp + currentMaxHP;
 
             if (cur <= 0) {
-                dyingLevel = Math.min(4, (dyingLevel || (1 + (parseInt(document.getElementById('in-wounds').value)||0))) + 1);
+                const tempAbsorb = Math.min(temp, effectiveDamage);
+                if (tempAbsorb > 0) {
+                    temp = setCurrentTempHP(temp - tempAbsorb);
+                    effectiveDamage -= tempAbsorb;
+                }
+                animationAmount = incomingDamage;
+                severityRatio = currentMaxHP > 0 ? incomingDamage / currentMaxHP : 0;
+                if (effectiveDamage > 0) {
+                    dyingLevel = Math.min(4, (dyingLevel || (1 + (parseInt(document.getElementById('in-wounds').value)||0))) + 1);
+                }
             } else {
                 if (document.getElementById('use-shield-damage')?.checked) {
                     const hard = parseInt(document.getElementById('sh-hard').value) || 0;
@@ -4327,20 +4405,29 @@ ${getCleanFeatType(slot.type)}`;
                     }
                 }
 
-                animationAmount = effectiveDamage;
-                severityRatio = currentMaxHP > 0 ? effectiveDamage / currentMaxHP : 0;
+                const damageAfterShield = effectiveDamage;
+                const tempAbsorb = Math.min(temp, effectiveDamage);
+                if (tempAbsorb > 0) {
+                    temp = setCurrentTempHP(temp - tempAbsorb);
+                    effectiveDamage -= tempAbsorb;
+                }
 
-                if (effectiveDamage >= massiveDeathLimit) {
+                animationAmount = damageAfterShield;
+                severityRatio = currentMaxHP > 0 ? damageAfterShield / currentMaxHP : 0;
+
+                if (effectiveDamage > 0 && effectiveDamage >= massiveDeathLimit) {
                     hpCurEl.value = 0;
                     dyingLevel = 4;
                     lastDeathCheck = null;
-                } else {
+                } else if (effectiveDamage > 0) {
                     hpCurEl.value = Math.max(0, cur - effectiveDamage);
                     if (parseInt(hpCurEl.value) === 0) {
                         const wounds = parseInt(document.getElementById('in-wounds').value) || 0;
                         dyingLevel = Math.min(4, 1 + wounds + (wasCritDamage ? 1 : 0));
                         lastDeathCheck = null;
                     }
+                } else {
+                    hpCurEl.value = cur;
                 }
             }
 
@@ -4361,7 +4448,9 @@ ${getCleanFeatType(slot.type)}`;
         }
 
         const hpAfter = parseInt(hpCurEl.value) || 0;
-        const hpPctAfter = currentMaxHP > 0 ? clampPct01(hpAfter / currentMaxHP) : 0;
+        const hpTempAfter = getCurrentTempHP();
+        const hpAfterBar = getHpBarSegments(hpAfter, currentMaxHP, hpTempAfter);
+        const hpPctAfter = clampPct01(hpAfterBar.total / hpAfterBar.denom);
 
         if (hpCalcEl) hpCalcEl.value = '';
         clampCurrentHPInput();
@@ -5909,7 +5998,9 @@ ${getCleanFeatType(slot.type)}`;
             const max = Math.max(0, parseInt(sheet?.['in-hp-max'] ?? sheet?.['in-hp-cur']) || 0);
             let cur = parseInt(sheet?.['in-hp-cur']);
             if (!Number.isFinite(cur)) cur = max;
-            return { cur: Math.max(0, Math.min(max, cur)), max };
+            cur = Math.max(0, Math.min(max, cur));
+            const temp = Math.max(0, parseInt(sheet?.['in-hp-temp']) || 0);
+            return { cur, max, temp, total: cur + temp };
         }
         const lvl = Math.max(1, Math.min(20, parseInt(sheet?.['in-lvl']) || 1));
         const con = parseInt(sheet?.abilities?.con) || 0;
@@ -5918,11 +6009,13 @@ ${getCleanFeatType(slot.type)}`;
         const max = Math.max(0, anc + (cls + con) * lvl);
         let cur = parseInt(sheet?.['in-hp-cur']);
         if (!Number.isFinite(cur)) cur = max;
-        return { cur: Math.max(0, Math.min(max, cur)), max };
+        cur = Math.max(0, Math.min(max, cur));
+        const temp = Math.max(0, parseInt(sheet?.['in-hp-temp']) || 0);
+        return { cur, max, temp, total: cur + temp };
     }
 
     function getBattleHpColor(hp) {
-        const pct = hp?.max > 0 ? hp.cur / hp.max : 0;
+        const pct = hp?.max > 0 ? (hp.total ?? hp.cur) / hp.max : 0;
         if (pct <= 0.34) return 'var(--hp-red)';
         if (pct <= 0.67) return 'var(--hp-gold)';
         return 'var(--hp-green)';
@@ -6192,13 +6285,13 @@ ${getCleanFeatType(slot.type)}`;
             const p = state.participants[i];
             const info = getBattleParticipantInfo(p);
             if (!info) return '';
-            const hp = info.hp || { cur: 0, max: 0 };
-            const pct = hp.max > 0 ? Math.max(0, Math.min(100, (hp.cur / hp.max) * 100)) : 0;
+            const hp = info.hp || { cur: 0, max: 0, temp: 0 };
+            const hpBar = getHpBarSegments(hp.cur, hp.max, hp.temp || 0);
             const hpColor = getBattleHpColor(hp);
             const currentClass = lane === 'center' ? 'current' : '';
             return `<button type="button" class="battle-turn-card ${currentClass}" onclick="showBattleCurrentSheet()">
                 <span class="battle-turn-avatar">${renderBattleAvatar(info)}</span>
-                <span class="battle-turn-main"><span class="battle-turn-name">${escapeHtml(info.name)}</span><span class="battle-turn-hp"><i style="width:${pct}%; background:${hpColor}"></i></span></span>
+                <span class="battle-turn-main"><span class="battle-turn-name">${escapeHtml(info.name)}</span><span class="battle-turn-hp"><i style="width:${hpBar.curPct}%; background:${hpColor}"></i>${(hp.temp || 0) > 0 ? `<i class="temp" style="left:${hpBar.tempLeftPct}%; width:${hpBar.tempPct}%"></i>` : ''}</span></span>
                 <b>${escapeHtml(String(p.initiative ?? '...'))}</b>
             </button>`;
         };
@@ -6452,6 +6545,7 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('battle-hp-title').innerText = info.name;
         document.getElementById('battle-hp-current').value = info.hp.cur;
         document.getElementById('battle-hp-max').value = info.hp.max;
+        document.getElementById('battle-hp-temp').value = info.hp.temp || 0;
         const maxInput = document.getElementById('battle-hp-max');
         if (maxInput) maxInput.disabled = participant.source === 'hero';
         clearBattleHpKeypad();
@@ -6479,18 +6573,24 @@ ${getCleanFeatType(slot.type)}`;
     function updateBattleHpPreview() {
         const curInput = document.getElementById('battle-hp-current');
         const maxInput = document.getElementById('battle-hp-max');
+        const tempInput = document.getElementById('battle-hp-temp');
         const max = Math.max(0, parseInt(maxInput?.value) || 0);
         let cur = Math.max(0, parseInt(curInput?.value) || 0);
         cur = Math.min(max, cur);
         if (curInput && String(curInput.value) !== String(cur)) curInput.value = cur;
-        const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
+        let temp = Math.max(0, parseInt(tempInput?.value) || 0);
+        if (tempInput && String(tempInput.value) !== String(temp)) tempInput.value = temp;
+        const hpBar = getHpBarSegments(cur, max, temp);
         const fill = document.getElementById('battle-hp-fill-bar');
+        const tempFill = document.getElementById('battle-hp-temp-fill-bar');
         const nums = document.getElementById('battle-hp-numbers');
         if (fill) {
-            fill.style.width = `${pct}%`;
+            fill.style.width = `${hpBar.curPct}%`;
+            const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
             fill.style.background = pct <= 34 ? 'var(--hp-red)' : (pct <= 67 ? 'var(--hp-gold)' : 'var(--hp-green)');
         }
-        if (nums) nums.innerText = `${cur} / ${max}`;
+        applyTempHpBar(tempFill, hpBar.tempLeftPct, hpBar.tempPct);
+        if (nums) nums.innerText = temp > 0 ? `${cur + temp} / ${max} (+${temp})` : `${cur} / ${max}`;
     }
 
     function battleHpKeypadPress(value) {
@@ -6513,18 +6613,33 @@ ${getCleanFeatType(slot.type)}`;
         const input = document.getElementById('battle-hp-calc');
         const curInput = document.getElementById('battle-hp-current');
         const maxInput = document.getElementById('battle-hp-max');
+        const tempInput = document.getElementById('battle-hp-temp');
         const amount = Math.max(0, parseInt(input?.value) || 0);
         if (!amount || !curInput) return;
         const max = Math.max(0, parseInt(maxInput?.value) || 0);
         const before = Math.max(0, parseInt(curInput.value) || 0);
-        const beforePct = max > 0 ? Math.max(0, Math.min(1, before / max)) : 0;
-        const after = dir < 0 ? Math.max(0, before - amount) : Math.min(max, before + amount);
-        const afterPct = max > 0 ? Math.max(0, Math.min(1, after / max)) : 0;
+        let temp = Math.max(0, parseInt(tempInput?.value) || 0);
+        const beforeBar = getHpBarSegments(before, max, temp);
+        const beforePct = clampPct01(beforeBar.total / beforeBar.denom);
+        let after = before;
+        let afterTemp = temp;
+        if (dir === 2) {
+            afterTemp = amount;
+        } else if (dir < 0) {
+            const tempAbsorb = Math.min(temp, amount);
+            afterTemp = temp - tempAbsorb;
+            after = Math.max(0, before - (amount - tempAbsorb));
+        } else {
+            after = Math.min(max, before + amount);
+        }
+        const afterBar = getHpBarSegments(after, max, afterTemp);
+        const afterPct = clampPct01(afterBar.total / afterBar.denom);
         curInput.value = after;
+        if (tempInput) tempInput.value = afterTemp;
         clearBattleHpKeypad();
         updateBattleHpPreview();
         saveBattleHpModal(false);
-        animateBattleHpChange(dir < 0 ? 'damage' : 'heal', Math.abs(after - before) || amount, beforePct, afterPct);
+        animateBattleHpChange(dir === 2 ? 'temp' : (dir < 0 ? 'damage' : 'heal'), amount, beforePct, afterPct);
     }
 
     function animateBattleHpChange(type, amount, fromPct, toPct) {
@@ -6537,7 +6652,7 @@ ${getCleanFeatType(slot.type)}`;
         const severity = Math.abs((fromPct || 0) - (toPct || 0));
         const shakeClass = type === 'damage' && severity >= 0.5 ? 'hp-shake-medium' : (type === 'damage' && severity >= 0.25 ? 'hp-shake-light' : '');
         if (shakeClass) restartHpAnimation(root, shakeClass, 520);
-        const color = type === 'heal' ? '#86efac' : '#fca5a5';
+        const color = type === 'temp' ? '#67c7d7' : (type === 'heal' ? '#86efac' : '#fca5a5');
         spawnHpTrailParticles(target, type, color, severity >= 0.5 ? 12 : 7, fromPct, toPct);
     }
 
@@ -6550,7 +6665,9 @@ ${getCleanFeatType(slot.type)}`;
         const sheet = readCharacterSheet(participant.characterId, scope) || createBlankSheetData();
         const max = Math.max(0, parseInt(document.getElementById('battle-hp-max')?.value) || 0);
         const cur = Math.max(0, Math.min(max, parseInt(document.getElementById('battle-hp-current')?.value) || 0));
+        const temp = Math.max(0, parseInt(document.getElementById('battle-hp-temp')?.value) || 0);
         sheet['in-hp-cur'] = cur;
+        sheet['in-hp-temp'] = temp;
         if (isWorkshopScope(scope)) sheet['in-hp-max'] = max;
         writeCharacterSheet(participant.characterId, sheet, scope);
         if (closeAfter) closeModal('battleHpModal');
@@ -7431,7 +7548,7 @@ ${getCleanFeatType(slot.type)}`;
             'persona-note-5': '', 'persona-note-6': '',
             'prof-languages': '',
             'in-name': name, 'in-anc': '', 'in-cls': '', 'in-lvl': defaultLevel, 'in-speed': 25, 'in-exp': 0,
-            'in-hp-cur': defaultMaxHP, 'in-hp-max': defaultMaxHP, 'in-hp-anc': defaultAncestryHP, 'in-hp-cls': defaultClassHP, 'in-wounds': 0,
+            'in-hp-cur': defaultMaxHP, 'in-hp-temp': 0, 'in-hp-max': defaultMaxHP, 'in-hp-anc': defaultAncestryHP, 'in-hp-cls': defaultClassHP, 'in-wounds': 0,
             'in-ac-item': 0, 'in-ac-pen': 0, 'in-ac-cap': 0, 'in-ac-prof': 0,
             'workshop-show-feats': false, 'workshop-show-personality': true, 'workshop-show-equipment': false,
             'use-magic': false, 'use-focus': false, 'focus-points-max': 1, 'has-shield': false, 'sh-bonus': 0, 'sh-hard': 0, 'sh-hp-max': 0, 'sh-hp-cur': 0,
@@ -7535,7 +7652,8 @@ ${getCleanFeatType(slot.type)}`;
             let cur = parseInt(s?.['in-hp-cur']);
             if (!Number.isFinite(cur)) cur = max;
             cur = Math.max(0, Math.min(max, cur));
-            return { cur, max };
+            const temp = Math.max(0, parseInt(s?.['in-hp-temp']) || 0);
+            return { cur, max, temp, total: cur + temp };
         }
         const lvl = clampLevelForScope(s?.['in-lvl'] ?? 1, scope);
         const con = parseInt(s?.abilities?.con) || 0;
@@ -7545,11 +7663,12 @@ ${getCleanFeatType(slot.type)}`;
         let cur = parseInt(s?.['in-hp-cur']);
         if (!Number.isFinite(cur)) cur = max;
         cur = Math.max(0, Math.min(max, cur));
-        return { cur, max };
+        const temp = Math.max(0, parseInt(s?.['in-hp-temp']) || 0);
+        return { cur, max, temp, total: cur + temp };
     }
 
     function getCharacterHPColorClass(hp) {
-        const pct = hp?.max > 0 ? hp.cur / hp.max : 0;
+        const pct = hp?.max > 0 ? (hp.total ?? hp.cur) / hp.max : 0;
         if (pct <= 0.34) return 'hp-bad';
         if (pct <= 0.67) return 'hp-warn';
         return 'hp-good';
@@ -7865,7 +7984,7 @@ ${getCleanFeatType(slot.type)}`;
             const menuHtml = menuOpen ? `<div class="character-context-menu" onclick="event.stopPropagation()"><button type="button" onclick="exportCharacterJSON('${id}', event)">Скачать</button><button type="button" onclick="cloneCharacter('${id}', event)">Клонировать</button><button type="button" class="danger" onclick="queueCharacterDelete('${id}', event)">Удалить</button></div>` : '';
             const metaHtml = workshopCards ? '' : `<div class="character-meta">${escapeHtml(meta.meta || 'Народ — Класс 1')}</div>`;
             const levelHtml = workshopCards ? `<div class="character-level">Ур. ${level}</div>` : '';
-            return `<div class="character-card ${workshopCards ? 'workshop-character-card' : ''} ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div>${metaHtml}<div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.cur}/${hp.max}</span></div></div><div class="character-card-actions">${levelHtml}<button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
+            return `<div class="character-card ${workshopCards ? 'workshop-character-card' : ''} ${cls}" data-reorder-type="characters" data-reorder-index="${idx}" onclick="${click}" ondragover="characterDragOver(event)" ondrop="characterDrop(event, ${idx})"><div class="character-drag" draggable="${draggable}" onclick="${dragHandleClick}" ondragstart="characterDragStart(event, ${idx})" ondragend="characterDragEnd(event)" title="${dragHandleTitle}">☰</div><div class="character-avatar">${avatar}</div><div class="character-text"><div class="character-name">${escapeHtml(meta.name || ch.name || 'Герой')}</div>${metaHtml}<div class="character-hp ${hpClass}"><span class="character-hp-value">${hp.total ?? hp.cur}/${hp.max}${(hp.temp || 0) > 0 ? ` (+${hp.temp})` : ''}</span></div></div><div class="character-card-actions">${levelHtml}<button type="button" class="character-menu-btn" onclick="toggleCharacterContextMenu('${id}', event)" title="Меню персонажа" aria-label="Меню персонажа">•••</button>${menuHtml}</div></div>`;
         }).join('') + addCardHtml;
         syncMobileReorderButtons();
     }

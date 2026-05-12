@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.03j">
+    <link rel="stylesheet" href="css/styles.css?v=1.04">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -67,7 +67,7 @@
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
         <div id="workshop-battle-view" class="workshop-battle-view"></div>
-        <div class="app-version-mark">IntListPC v1.03j<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.04<br>by RubiDus</div>
     </div>
 </div>
 
@@ -180,6 +180,7 @@
                     <div id="disp-hp" class="hp-numbers v" onclick="openModal('hpModal')">0 / 0 оз</div>
                     <div class="hp-bar-container" onclick="openModal('hpModal')">
                         <div id="hp-fill-bar" class="banner-hp-fill"></div>
+                        <div id="hp-temp-fill-bar" class="banner-hp-temp-fill"></div>
                     </div>
                 </div>
                 <div id="shield-bar-wrap" class="shield-bar-container" onclick="openModal('hpModal')">
@@ -903,7 +904,7 @@
 
     <div class="hp-modal-bars">
         <div class="hp-modal-bar-label"><span>Здоровье</span><span id="hp-modal-numbers">0 / 0</span></div>
-        <div class="hp-modal-bar-track"><div id="hp-modal-fill-bar" class="hp-modal-bar-fill"></div></div>
+        <div class="hp-modal-bar-track"><div id="hp-modal-fill-bar" class="hp-modal-bar-fill"></div><div id="hp-modal-temp-fill-bar" class="hp-modal-bar-fill hp-modal-temp-fill"></div></div>
         <div id="hp-modal-shield-block" class="hp-modal-shield-block">
             <div class="hp-modal-bar-label"><span>Щит</span><span id="hp-modal-shield-numbers">0 / 0</span></div>
             <div class="hp-modal-bar-track"><div id="hp-modal-shield-fill" class="hp-modal-bar-fill hp-modal-shield-fill"></div></div>
@@ -922,6 +923,7 @@
             <input type="text" id="hp-calc-val" class="hp-keypad-input" value="" placeholder="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="setHpKeypadValue(this.value)">
             <div class="hp-keypad-actions">
                 <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyHpKeypad(1)">Лечение</button>
+                <button type="button" class="hp-key hp-key-action hp-key-temp" onclick="applyHpKeypad(2)">Временные</button>
                 <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyHpKeypad(-1)">Урон</button>
             </div>
         </div>
@@ -951,6 +953,8 @@
     <h3>Настройки здоровья</h3>
     <label class="l">Текущие ОЗ</label>
     <input type="number" id="in-hp-cur" oninput="clampCurrentHPInput(); saveAll()">
+    <label class="l">Временные ОЗ</label>
+    <input type="number" id="in-hp-temp" value="0" oninput="clampTempHPInput(); saveAll()">
     <label class="l" id="hp-anc-label">ОЗ народа</label>
     <input type="number" id="in-hp-anc" value="8" oninput="saveAll()">
     <label class="l" id="hp-cls-label">ОЗ класса</label>
@@ -1010,9 +1014,9 @@
     </div>
     <div class="battle-hp-bars">
         <div class="hp-modal-bar-label"><span>Здоровье</span><span id="battle-hp-numbers">0 / 0</span></div>
-        <div class="hp-modal-bar-track"><div id="battle-hp-fill-bar" class="hp-modal-bar-fill"></div></div>
+        <div class="hp-modal-bar-track"><div id="battle-hp-fill-bar" class="hp-modal-bar-fill"></div><div id="battle-hp-temp-fill-bar" class="hp-modal-bar-fill hp-modal-temp-fill"></div></div>
     </div>
-    <div class="atk-modal-grid">
+    <div class="atk-modal-grid battle-hp-field-grid">
         <div>
             <label class="l">Текущее ОЗ</label>
             <input type="number" id="battle-hp-current" value="0" oninput="updateBattleHpPreview()">
@@ -1021,12 +1025,17 @@
             <label class="l">Макс ОЗ</label>
             <input type="number" id="battle-hp-max" value="0" oninput="updateBattleHpPreview()">
         </div>
+        <div>
+            <label class="l">Временные ОЗ</label>
+            <input type="number" id="battle-hp-temp" value="0" oninput="updateBattleHpPreview()">
+        </div>
     </div>
     <div id="battle-hp-keypad-shell" class="hp-keypad-shell open battle-hp-keypad">
         <div class="hp-keypad-top">
             <input type="text" id="battle-hp-calc" class="hp-keypad-input" value="" placeholder="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             <div class="hp-keypad-actions">
                 <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyBattleHpKeypad(1)">Лечение</button>
+                <button type="button" class="hp-key hp-key-action hp-key-temp" onclick="applyBattleHpKeypad(2)">Временные</button>
                 <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyBattleHpKeypad(-1)">Урон</button>
             </div>
         </div>
@@ -1119,7 +1128,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.03j"></script>
+<script src="js/app.js?v=1.04"></script>
 
 <div class="footer-spacer"></div>
 </body>

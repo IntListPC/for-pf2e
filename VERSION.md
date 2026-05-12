@@ -1,6 +1,10 @@
 # IntListPC Version Notes
 
-Current version: `1.03j`
+Current version: `1.04`
+
+`1.04` - Version label and cache-busting updated for the temporary HP release.
+
+`1.03k` - Character and bestiary HP calculators now support saved temporary HP, replace the previous temporary HP value when applied, consume it before current HP on damage, and render it as a gray-cyan bar with matching animations.
 
 `1.03j` - After combat starts, initiative setup controls and avatar initiative pickers are hidden; bestiary and character skill displays now refresh their saved proficiency dots and lore/intelligence entries immediately.
 

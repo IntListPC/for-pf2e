@@ -2,7 +2,7 @@
             --bg: #1a1d22; --card: #24272e; --banner-bg: #2a2f45;
             --accent: #8b5cf6; --accent-dim: #4c1d95;
             --text: #ffffff; --text-dim: #94a3b8; --border: #334155; 
-            --input-bg: #0f172a; --hp-green: #10b981; --hp-gold: #fbbf24; --hp-red: #ef4444;
+            --input-bg: #0f172a; --hp-green: #10b981; --hp-gold: #fbbf24; --hp-red: #ef4444; --hp-temp: #67c7d7;
             --shield-blue: #3b82f6;
             --font-main: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             --header-height: auto;
@@ -145,6 +145,7 @@
         .hp-numbers { font-size: 18px; font-weight: 900; min-width: 85px; }
         .hp-bar-container { flex: 1; height: 10px; background: #000; border-radius: 5px; overflow: hidden; position: relative; }
         .banner-hp-fill { height: 100%; transition: width 0.4s ease; }
+        .banner-hp-temp-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: linear-gradient(90deg, rgba(148, 163, 184, 0.72), var(--hp-temp)); box-shadow: 0 0 10px rgba(103, 199, 215, 0.45); transition: left 0.4s ease, width 0.4s ease; }
         
         .shield-bar-container { width: 100%; height: 4px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; display: none; }
         .shield-bar-container.active { display: block; }
@@ -778,8 +779,9 @@
         .hp-settings-btn { width: 42px; height: 42px; border-radius: 14px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text); font-size: 20px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
         .hp-modal-bars { background: rgba(0,0,0,0.22); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; padding: 12px; margin-bottom: 16px; }
         .hp-modal-bar-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-dim); font-size: 11px; font-weight: 900; text-transform: uppercase; margin-bottom: 7px; }
-        .hp-modal-bar-track { width: 100%; height: 12px; background: #000; border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
+        .hp-modal-bar-track { width: 100%; height: 12px; background: #000; border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); position: relative; }
         .hp-modal-bar-fill { height: 100%; width: 0%; transition: width 0.4s ease, background 0.4s ease; }
+        .hp-modal-temp-fill { position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(90deg, rgba(148, 163, 184, 0.72), var(--hp-temp)); box-shadow: 0 0 10px rgba(103, 199, 215, 0.48); transition: left 0.4s ease, width 0.4s ease; }
         .hp-modal-shield-block { display: none; margin-top: 12px; }
         .hp-modal-shield-block.active { display: block; }
         .hp-shield-controls { margin: 10px 0 16px; animation: slideIn 0.18s ease-out; }
@@ -805,15 +807,16 @@
         .hp-keypad-top { padding: 12px; border-radius: 20px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(15, 23, 42, 0.34); }
         #hp-calc-val.hp-keypad-input { width: 100%; height: 54px; margin: 0; border-radius: 15px; border: 1px solid rgba(148, 163, 184, 0.42); background: rgba(0, 0, 0, 0.22); color: var(--text); font-size: 30px; font-weight: 900; text-align: right; padding: 0 16px; font-variant-numeric: tabular-nums; }
         #hp-calc-val.hp-keypad-input::placeholder { color: rgba(148, 163, 184, 0.52); }
-        .hp-keypad-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .hp-keypad-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
         .hp-keypad-body { display: none; margin-top: 10px; padding: 12px; border-radius: 20px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(15, 23, 42, 0.38); }
         .hp-keypad-shell.open .hp-keypad-body { display: block; animation: slideIn 0.18s ease-out; }
         .hp-keypad-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
         .hp-key { min-height: 58px; border: 1px solid rgba(148, 163, 184, 0.42); background: rgba(255,255,255,0.035); color: var(--text); border-radius: 13px; font-size: 26px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; }
         .hp-key:active { transform: scale(0.97); }
         .hp-key-small { font-size: 18px; color: var(--text-dim); }
-        .hp-key-action { min-height: 54px; border-radius: 14px; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; border-width: 1px; }
+        .hp-key-action { min-height: 54px; border-radius: 14px; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; border-width: 1px; padding-left: 6px; padding-right: 6px; }
         .hp-key-heal { color: #86efac; border-color: rgba(16, 185, 129, 0.66); background: rgba(16, 185, 129, 0.16); }
+        .hp-key-temp { color: #b7f4fb; border-color: rgba(103, 199, 215, 0.68); background: rgba(103, 199, 215, 0.14); box-shadow: 0 0 12px rgba(103, 199, 215, 0.08); }
         .hp-key-damage { color: #fca5a5; border-color: rgba(239, 68, 68, 0.68); background: rgba(239, 68, 68, 0.16); }
         .hp-key-clear { color: #bfdbfe; border-color: rgba(59, 130, 246, 0.48); background: rgba(59, 130, 246, 0.08); }
         @media (max-width: 430px) {
@@ -841,10 +844,12 @@
         .hp-float-number { position: absolute; left: 50%; top: 12px; transform: translate(-50%, 0) scale(0.96); z-index: 5; pointer-events: none; font-size: 24px; line-height: 1; font-weight: 1000; letter-spacing: -0.03em; text-shadow: 0 4px 14px rgba(0,0,0,0.55); animation: hp-float-up 900ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
         .hp-float-number.damage { color: #fca5a5; }
         .hp-float-number.heal { color: #86efac; }
+        .hp-float-number.temp { color: #b7f4fb; text-shadow: 0 0 10px rgba(103, 199, 215, 0.58), 0 4px 14px rgba(0,0,0,0.55); }
         @keyframes hp-float-up { 0% { opacity: 0; transform: translate(-50%, 8px) scale(0.92); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.08); } 100% { opacity: 0; transform: translate(-50%, -42px) scale(1.18); } }
         .hp-particle { position: absolute; left: var(--x, 50%); top: var(--y, 50%); width: var(--size, 5px); height: var(--size, 5px); border-radius: 999px; background: var(--particle-color, var(--hp-green)); color: var(--particle-color, var(--hp-green)); z-index: 4; pointer-events: none; box-shadow: 0 0 9px currentColor, 0 0 16px rgba(255,255,255,0.08); opacity: 0; animation: hp-particle-trail 720ms ease-out forwards; animation-delay: var(--delay, 0ms); }
         .hp-particle.heal { filter: brightness(1.08); }
         .hp-particle.damage { filter: brightness(1.02); }
+        .hp-particle.temp { filter: brightness(1.12) saturate(1.1); }
         @keyframes hp-particle-trail { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); } 18% { opacity: 0.95; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -34px))) scale(0.22); } }
         .shield-bar-container, .hp-modal-shield-block { position: relative; }
 
@@ -2098,12 +2103,21 @@ body.workshop-sheet .magic-spell-card.ritual {
     background: rgba(0,0,0,0.34);
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.06);
+    position: relative;
 }
 
 .battle-turn-hp i {
     display: block;
     height: 100%;
     border-radius: inherit;
+}
+
+.battle-turn-hp i.temp {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.72), var(--hp-temp));
+    box-shadow: 0 0 8px rgba(103, 199, 215, 0.45);
 }
 
 .battle-turn-card b {

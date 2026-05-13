@@ -2,7 +2,7 @@
 
 Current version: `1.04`
 
-`1.04` - Version label and cache-busting updated for the temporary HP release.
+`1.04` - Version label and cache-busting updated for the temporary HP release; attack critical damage now reads the live crit state and falls back to a doubled normal damage formula when no explicit crit formula is set; attacks and equipment weapons can optionally add Strength or a custom flat bonus to damage.
 
 `1.03k` - Character and bestiary HP calculators now support saved temporary HP, replace the previous temporary HP value when applied, consume it before current HP on damage, and render it as a gray-cyan bar with matching animations.
 

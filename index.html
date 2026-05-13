@@ -500,6 +500,17 @@
     </div>
 
     <select id="atk-type"></select>
+    <div class="attack-damage-bonus-row">
+        <label class="equipment-inline-toggle" for="atk-damage-bonus-enabled">
+            <input type="checkbox" id="atk-damage-bonus-enabled" onchange="syncAttackDamageBonusControls()">
+            <span>Добавить урон</span>
+        </label>
+        <select id="atk-damage-bonus-mode" onchange="syncAttackDamageBonusControls()">
+            <option value="str">От силы</option>
+            <option value="custom">Своё</option>
+        </select>
+        <input type="number" id="atk-damage-bonus-value" value="0" step="1" placeholder="0">
+    </div>
 
     <div class="equipment-segment">
         <button type="button" id="atk-melee-btn" onclick="setAttackRange('melee')">Ближний</button>
@@ -748,6 +759,17 @@
         </div>
         <label class="l" style="margin-top:8px;">Тип урона</label>
         <select id="equipment-weapon-damage-type"></select>
+        <div class="attack-damage-bonus-row">
+            <label class="equipment-inline-toggle" for="equipment-weapon-damage-bonus-enabled">
+                <input type="checkbox" id="equipment-weapon-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
+                <span>Добавить урон</span>
+            </label>
+            <select id="equipment-weapon-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
+                <option value="str">От силы</option>
+                <option value="custom">Своё</option>
+            </select>
+            <input type="number" id="equipment-weapon-damage-bonus-value" value="0" step="1" placeholder="0">
+        </div>
         <button type="button" id="equipment-weapon-tags-toggle-btn" class="btn-sec atk-modal-tags-toggle" onclick="toggleEquipmentWeaponTagsSection()">ХЕШТЕГИ ▼</button>
         <div id="equipment-weapon-tags-section" class="atk-modal-tags-wrap">
             <label class="l">Хэштеги удара</label>
@@ -772,6 +794,17 @@
             </div>
             <label class="l" style="margin-top:8px;">Тип урона</label>
             <select id="equipment-weapon2-damage-type"></select>
+            <div class="attack-damage-bonus-row">
+                <label class="equipment-inline-toggle" for="equipment-weapon2-damage-bonus-enabled">
+                    <input type="checkbox" id="equipment-weapon2-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
+                    <span>Добавить урон</span>
+                </label>
+                <select id="equipment-weapon2-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
+                    <option value="str">От силы</option>
+                    <option value="custom">Своё</option>
+                </select>
+                <input type="number" id="equipment-weapon2-damage-bonus-value" value="0" step="1" placeholder="0">
+            </div>
         </div>
     </div>
     <label class="l">Короткое описание</label>
@@ -1128,7 +1161,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.04"></script>
+<script src="js/app.js?v=1.04-dmgbonus"></script>
 
 <div class="footer-spacer"></div>
 </body>

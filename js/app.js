@@ -2126,6 +2126,9 @@ ${getCleanFeatType(slot.type)}`;
                 dmg: String(weapon.dmg || '').replace(/d/gi, 'к'),
                 crit: String(weapon.crit || '').replace(/d/gi, 'к'),
                 type: ATTACK_DAMAGE_TYPES.includes(weapon.type) ? weapon.type : 'Дробящий',
+                damageBonusEnabled: !!weapon.damageBonusEnabled,
+                damageBonusMode: weapon.damageBonusMode === 'custom' ? 'custom' : 'str',
+                damageBonusValue: parseInt(weapon.damageBonusValue) || 0,
                 tags: String(weapon.tags || '').trim(),
                 second: {
                     enabled: !!second.enabled,
@@ -2138,6 +2141,9 @@ ${getCleanFeatType(slot.type)}`;
                     dmg: String(second.dmg || '').replace(/d/gi, 'к'),
                     crit: String(second.crit || '').replace(/d/gi, 'к'),
                     type: ATTACK_DAMAGE_TYPES.includes(second.type) ? second.type : 'Дробящий',
+                    damageBonusEnabled: !!second.damageBonusEnabled,
+                    damageBonusMode: second.damageBonusMode === 'custom' ? 'custom' : 'str',
+                    damageBonusValue: parseInt(second.damageBonusValue) || 0,
                     tags: String(second.tags || '').trim()
                 }
             },
@@ -2383,6 +2389,9 @@ ${getCleanFeatType(slot.type)}`;
                     dmg: data.dmg || '1к8',
                     crit: data.crit || '',
                     type: data.type || 'Дробящий',
+                    damageBonusEnabled: !!data.damageBonusEnabled,
+                    damageBonusMode: data.damageBonusMode === 'custom' ? 'custom' : 'str',
+                    damageBonusValue: parseInt(data.damageBonusValue) || 0,
                     tags: data.tags || '',
                     tagsHidden: !!(old.tagsHidden || attackTagsHiddenById[id]),
                     ...(old.critActive ? { critActive: old.critActive } : {})
@@ -2683,6 +2692,9 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('equipment-weapon-dmg').value = item?.weapon?.dmg || '1к8';
         document.getElementById('equipment-weapon-crit').value = item?.weapon?.crit || '';
         document.getElementById('equipment-weapon-damage-type').value = item?.weapon?.type || 'Дробящий';
+        document.getElementById('equipment-weapon-damage-bonus-enabled').checked = !!item?.weapon?.damageBonusEnabled;
+        document.getElementById('equipment-weapon-damage-bonus-mode').value = item?.weapon?.damageBonusMode === 'custom' ? 'custom' : 'str';
+        document.getElementById('equipment-weapon-damage-bonus-value').value = item?.weapon?.damageBonusValue ?? 0;
         document.getElementById('equipment-weapon-second-enabled').checked = !!item?.weapon?.second?.enabled;
         document.getElementById('equipment-weapon2-name').value = item?.weapon?.second?.name || '';
         document.getElementById('equipment-weapon2-stat').value = item?.weapon?.second?.stat || 'str';
@@ -2692,6 +2704,9 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('equipment-weapon2-dmg').value = item?.weapon?.second?.dmg || '1к8';
         document.getElementById('equipment-weapon2-crit').value = item?.weapon?.second?.crit || '';
         document.getElementById('equipment-weapon2-damage-type').value = item?.weapon?.second?.type || 'Дробящий';
+        document.getElementById('equipment-weapon2-damage-bonus-enabled').checked = !!item?.weapon?.second?.damageBonusEnabled;
+        document.getElementById('equipment-weapon2-damage-bonus-mode').value = item?.weapon?.second?.damageBonusMode === 'custom' ? 'custom' : 'str';
+        document.getElementById('equipment-weapon2-damage-bonus-value').value = item?.weapon?.second?.damageBonusValue ?? 0;
         setEquipmentWeaponTagsFromString(item?.weapon?.tags || '');
         equipmentWeaponTagsExpanded = false;
         document.getElementById('equipment-item-short').value = item?.short || '';
@@ -2699,6 +2714,8 @@ ${getCleanFeatType(slot.type)}`;
         setEquipmentLight(item ? !!item.light : defaultType === 'consumable');
         equipmentItemTypeChanged();
         syncEquipmentConsumableHealField();
+        syncEquipmentDamageBonusControls('equipment-weapon');
+        syncEquipmentDamageBonusControls('equipment-weapon2');
         openModal('equipmentItemModal');
     }
 
@@ -2837,6 +2854,9 @@ ${getCleanFeatType(slot.type)}`;
                 dmg: document.getElementById('equipment-weapon-dmg').value.replace(/d/gi, 'к'),
                 crit: document.getElementById('equipment-weapon-crit').value.replace(/d/gi, 'к'),
                 type: document.getElementById('equipment-weapon-damage-type').value,
+                damageBonusEnabled: !!document.getElementById('equipment-weapon-damage-bonus-enabled')?.checked,
+                damageBonusMode: normalizeAttackDamageBonusMode(document.getElementById('equipment-weapon-damage-bonus-mode')?.value),
+                damageBonusValue: parseInt(document.getElementById('equipment-weapon-damage-bonus-value')?.value) || 0,
                 tags: getEquipmentWeaponTagsAsString(),
                 second: {
                     enabled: document.getElementById('equipment-weapon-second-enabled').checked,
@@ -2848,6 +2868,9 @@ ${getCleanFeatType(slot.type)}`;
                     dmg: document.getElementById('equipment-weapon2-dmg').value.replace(/d/gi, 'к'),
                     crit: document.getElementById('equipment-weapon2-crit').value.replace(/d/gi, 'к'),
                     type: document.getElementById('equipment-weapon2-damage-type').value,
+                    damageBonusEnabled: !!document.getElementById('equipment-weapon2-damage-bonus-enabled')?.checked,
+                    damageBonusMode: normalizeAttackDamageBonusMode(document.getElementById('equipment-weapon2-damage-bonus-mode')?.value),
+                    damageBonusValue: parseInt(document.getElementById('equipment-weapon2-damage-bonus-value')?.value) || 0,
                     tags: ''
                 }
             },
@@ -4816,6 +4839,18 @@ ${getCleanFeatType(slot.type)}`;
         appendDiceLog(buildRollLogMarkup(label, equation, total, valStyle), borderColor);
     }
 
+    function findAttackById(atkId) {
+        return attacks.find(a => String(a.id) === String(atkId)) || null;
+    }
+
+    function getAttackCritActive(atkId) {
+        return !!activeCritAttacks[String(atkId)];
+    }
+
+    function setAttackCritActive(atkId, active) {
+        activeCritAttacks[String(atkId)] = !!active;
+    }
+
     function rollAttack(atkId, name, bonusOrRoll) {
         const atk = attacks.find(a => String(a.id) === String(atkId));
         if (!spendAmmoForAttack(atk, true)) return;
@@ -4844,12 +4879,12 @@ ${getCleanFeatType(slot.type)}`;
         if (isNat20) {
             valStyle = 'color:var(--hp-gold); font-size:36px; font-weight:900; text-shadow:0 0 8px rgba(251,191,36,0.6);';
             borderColor = 'var(--hp-gold)';
-            activeCritAttacks[atkId] = true;
+            setAttackCritActive(atkId, true);
             calculate();
         } else if (isNat1) {
             valStyle = 'color:var(--hp-red); font-size:36px; font-weight:900; text-shadow:0 0 8px rgba(239,68,68,0.6);';
             borderColor = 'var(--hp-red)';
-            activeCritAttacks[atkId] = false;
+            setAttackCritActive(atkId, false);
             calculate();
         }
 
@@ -5104,54 +5139,139 @@ ${getCleanFeatType(slot.type)}`;
         calculate();
     }
 
-    function rollDamage(atkId, name, isCrit) {
-        const atk = attacks.find(a => a.id === atkId);
+    function rollDamageFormula(formula) {
+        const f = String(formula || '').toLowerCase().replace(/d/g, 'к').replace(/\s/g, '');
+        const terms = f.match(/[+-]?[^+-]+/g) || [];
+        let total = 0;
+        let valid = false;
+        terms.forEach(term => {
+            const sign = term.startsWith('-') ? -1 : 1;
+            const clean = term.replace(/^[+-]/, '');
+            const dice = clean.match(/^(\d*)к(\d+)$/);
+            if (dice) {
+                valid = true;
+                const count = parseInt(dice[1]) || 1;
+                const faces = parseInt(dice[2]) || 8;
+                for (let i = 0; i < count; i++) {
+                    total += sign * (Math.floor(Math.random() * faces) + 1);
+                }
+                return;
+            }
+            if (/^\d+$/.test(clean)) {
+                valid = true;
+                total += sign * (parseInt(clean) || 0);
+            }
+        });
+        return { valid, total, label: f || String(formula || '') };
+    }
+
+    function doubleDamageFormula(formula) {
+        const f = String(formula || '').toLowerCase().replace(/d/g, 'к').replace(/\s/g, '');
+        const terms = f.match(/[+-]?[^+-]+/g) || [];
+        if (!terms.length) return f;
+        const doubled = terms.map((term, idx) => {
+            const sign = term.startsWith('-') ? '-' : (idx > 0 ? '+' : '');
+            const clean = term.replace(/^[+-]/, '');
+            const dice = clean.match(/^(\d*)к(\d+)$/);
+            if (dice) {
+                const count = (parseInt(dice[1]) || 1) * 2;
+                return `${sign}${count}к${parseInt(dice[2]) || 8}`;
+            }
+            if (/^\d+$/.test(clean)) return `${sign}${(parseInt(clean) || 0) * 2}`;
+            return `${sign}${clean}`;
+        }).join('');
+        return doubled || f;
+    }
+
+    function normalizeAttackDamageBonusMode(mode) {
+        return mode === 'custom' ? 'custom' : 'str';
+    }
+
+    function getCurrentAbilityMod(key) {
+        if (abilities && abilities[key] !== undefined) return parseInt(abilities[key]) || 0;
+        return parseInt(document.getElementById(`score-${key}`)?.value) || 0;
+    }
+
+    function getAttackDamageBonusValue(atk) {
+        if (!atk?.damageBonusEnabled) return 0;
+        if (normalizeAttackDamageBonusMode(atk.damageBonusMode) === 'custom') {
+            return parseInt(atk.damageBonusValue) || 0;
+        }
+        return getCurrentAbilityMod('str');
+    }
+
+    function appendFlatDamageBonus(formula, bonus) {
+        const base = String(formula || '').trim();
+        const value = parseInt(bonus) || 0;
+        if (!value) return base;
+        if (!base) return String(value);
+        return `${base}${value >= 0 ? '+' : ''}${value}`;
+    }
+
+    function getAttackDamageFormula(atk, isCrit = false) {
+        if (!atk) return '';
+        const bonus = getAttackDamageBonusValue(atk);
+        if (!isCrit) return appendFlatDamageBonus(atk.dmg || '', bonus);
+        const explicitCrit = String(atk.crit || '').trim();
+        if (explicitCrit) return appendFlatDamageBonus(explicitCrit, bonus * 2);
+        return doubleDamageFormula(appendFlatDamageBonus(atk.dmg || '', bonus));
+    }
+
+    function syncAttackDamageBonusControls() {
+        const enabledEl = document.getElementById('atk-damage-bonus-enabled');
+        const modeEl = document.getElementById('atk-damage-bonus-mode');
+        const valueEl = document.getElementById('atk-damage-bonus-value');
+        const enabled = !!enabledEl?.checked;
+        if (modeEl) modeEl.disabled = !enabled;
+        if (valueEl) {
+            const customMode = modeEl?.value === 'custom';
+            valueEl.disabled = !enabled || !customMode;
+            valueEl.placeholder = customMode ? '0' : String(getCurrentAbilityMod('str'));
+        }
+    }
+
+    function syncEquipmentDamageBonusControls(prefix) {
+        const enabledEl = document.getElementById(`${prefix}-damage-bonus-enabled`);
+        const modeEl = document.getElementById(`${prefix}-damage-bonus-mode`);
+        const valueEl = document.getElementById(`${prefix}-damage-bonus-value`);
+        const enabled = !!enabledEl?.checked;
+        if (modeEl) modeEl.disabled = !enabled;
+        if (valueEl) {
+            const customMode = modeEl?.value === 'custom';
+            valueEl.disabled = !enabled || !customMode;
+            valueEl.placeholder = customMode ? '0' : String(getCurrentAbilityMod('str'));
+        }
+    }
+
+    function rollDamage(atkId, name, isCrit = null) {
+        const atk = findAttackById(atkId);
         if(!atk) return;
 
-        let formula = (isCrit && atk.crit) ? atk.crit : atk.dmg;
-        let typeLabel = isCrit ? "КРИТ УРОН" : "Урон";
+        const isCritRoll = isCrit === true || getAttackCritActive(atkId);
+        let formula = getAttackDamageFormula(atk, isCritRoll);
         const displayName = formatNotificationLabel(name);
-        const damageColor = isCrit ? 'var(--hp-gold)' : 'var(--hp-red)';
-
-        let f = formula.toLowerCase().replace(/d/g, 'к').replace(/\s/g, '');
-        let total = 0;
-        let rollsHTML = '';
+        const damageColor = isCritRoll ? 'var(--hp-gold)' : 'var(--hp-red)';
         let msgStr = '';
+        const rolled = rollDamageFormula(formula);
 
-        // Базовая логика парсинга кубов. Можно писать и 1к8, и просто к8.
-        let match = f.match(/(\d*)к(\d+)([+-]\d+)?/);
-
-        if(match) {
-            let count = parseInt(match[1]) || 1;
-            let faces = parseInt(match[2]) || 8;
-            let mod = parseInt(match[3]) || 0;
-
-            let rolls = [];
-            for(let i=0; i<count; i++) {
-                let r = Math.floor(Math.random() * faces) + 1;
-                rolls.push(r);
-                total += r;
-            }
-            total += mod;
-            const visibleCount = match[1] ? String(count) : '';
-            rollsHTML = `${visibleCount}к${faces}${mod !== 0 ? (mod > 0 ? '+'+mod : mod) : ''}`;
-            msgStr = buildRollLogMarkup(name, rollsHTML, total, `color:${damageColor}; font-size:32px; font-weight:900;`);
+        if(rolled.valid) {
+            msgStr = buildRollLogMarkup(displayName, rolled.label, rolled.total, `color:${damageColor}; font-size:32px; font-weight:900;`);
         } else {
-            msgStr = buildRollLogMarkup(name, String(formula || ''), escapeHtml(formula || '—'), `color:${damageColor}; font-weight:900;`);
+            msgStr = buildRollLogMarkup(displayName, String(formula || ''), escapeHtml(formula || '—'), `color:${damageColor}; font-weight:900;`);
         }
 
         appendDiceLog(msgStr, damageColor);
 
         // Автоматическое отключение крита после нажатия
-        if(isCrit) {
-            activeCritAttacks[atkId] = false;
+        if(isCritRoll) {
+            setAttackCritActive(atkId, false);
             calculate();
         }
     }
 
     // Включение/отключение режима крита в строке
     function toggleCritMode(atkId) {
-        activeCritAttacks[atkId] = !activeCritAttacks[atkId];
+        setAttackCritActive(atkId, !getAttackCritActive(atkId));
         calculate();
     }
 
@@ -5184,7 +5304,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function clearAttackRuntimeState(id) {
-        delete activeCritAttacks[id];
+        delete activeCritAttacks[String(id)];
         delete attackTagsHiddenById[id];
         delete attackTagsExpandedById[id];
     }
@@ -5230,8 +5350,8 @@ ${getCleanFeatType(slot.type)}`;
             let hitStr = (totalHit >= 0 ? '+' : '') + totalHit;
             let hitTitle = mapPenalty ? `title="База ${formatSignedNumber(baseHit)}, штраф ${formatSignedNumber(mapPenalty)}"` : '';
 
-            let isCritActive = activeCritAttacks[atk.id] || false;
-            let currentDmgFormula = (isCritActive && atk.crit) ? atk.crit : (atk.dmg || '—');
+            let isCritActive = getAttackCritActive(atk.id);
+            let currentDmgFormula = getAttackDamageFormula(atk, isCritActive) || '—';
             let displayName = escapeHtml(atk.name || 'Атака') + (atk.equipmentSourceId ? ' <span title="Из снаряжения">🎒</span>' : '');
             let displayType = escapeHtml(atk.type || '');
             let dmgTypeClass = getAttackDamageTypeClass(atk.type);
@@ -5264,7 +5384,7 @@ ${getCleanFeatType(slot.type)}`;
             const tagsHideClick = reorderActive ? '' : `onclick="event.stopPropagation(); toggleAttackTagsVisibility(${atk.id})"`;
             const critClick = reorderActive ? '' : `onclick="toggleCritMode(${atk.id})"`;
             const hitClick = reorderActive ? '' : `onclick="rollAttack(${atk.id}, '${jsEscape(atk.name || 'Атака')}', '${jsEscape(hitStr)}')"`;
-            const dmgClick = reorderActive ? '' : `onclick="rollDamage(${atk.id}, '${jsEscape(atk.name || 'Атака')}', ${isCritActive})"`;
+            const dmgClick = reorderActive ? '' : `onclick="rollDamage('${jsEscape(atk.id)}', '${jsEscape(atk.name || 'Атака')}')"`;
 
             const tagsHidden = !!(atk.tagsHidden || attackTagsHiddenById[atk.id]);
             list.innerHTML += `
@@ -5317,6 +5437,9 @@ ${getCleanFeatType(slot.type)}`;
             chargesEnabled: false,
             chargeMax: 1,
             chargeCurrent: 0,
+            damageBonusEnabled: false,
+            damageBonusMode: "str",
+            damageBonusValue: 0,
             tagsHidden: false
         });
         saveAll();
@@ -5344,6 +5467,10 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('atk-crit').value = (atk.crit || '').replace(/d/gi, 'к');
         const typeSel = document.getElementById('atk-type');
         if (typeSel) typeSel.value = ATTACK_DAMAGE_TYPES.includes(atk.type) ? atk.type : 'Дробящий';
+        document.getElementById('atk-damage-bonus-enabled').checked = !!atk.damageBonusEnabled;
+        document.getElementById('atk-damage-bonus-mode').value = normalizeAttackDamageBonusMode(atk.damageBonusMode);
+        document.getElementById('atk-damage-bonus-value').value = atk.damageBonusValue ?? 0;
+        syncAttackDamageBonusControls();
         setAttackRange(atk.range || 'melee');
         renderAmmoSelectOptions('atk-ammo-item', atk.ammoItemId || '');
         document.getElementById('atk-charges-enabled').checked = !!atk.chargesEnabled;
@@ -5370,6 +5497,9 @@ ${getCleanFeatType(slot.type)}`;
         atk.dmg = document.getElementById('atk-dmg').value.replace(/d/gi, 'к');
         atk.crit = document.getElementById('atk-crit').value.replace(/d/gi, 'к');
         atk.type = document.getElementById('atk-type').value || 'Дробящий';
+        atk.damageBonusEnabled = !!document.getElementById('atk-damage-bonus-enabled')?.checked;
+        atk.damageBonusMode = normalizeAttackDamageBonusMode(document.getElementById('atk-damage-bonus-mode')?.value);
+        atk.damageBonusValue = parseInt(document.getElementById('atk-damage-bonus-value')?.value) || 0;
         atk.range = document.getElementById('atk-range').value || 'melee';
         atk.ammoItemId = document.getElementById('atk-ammo-item').value;
         atk.chargesEnabled = !!document.getElementById('atk-charges-enabled').checked;
@@ -8537,6 +8667,8 @@ ${getCleanFeatType(slot.type)}`;
         exportAllCharactersJSON,
         startImportCharacterAsNew,
         confirmCloudDownload,
+        syncAttackDamageBonusControls,
+        syncEquipmentDamageBonusControls,
         openModal,
         closeModal
     });

@@ -50,8 +50,11 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let cloudUser = null;
     let cloudSyncTimer = null;
     let cloudLoading = false;
+    let cloudAutosaveSuppressed = false;
+    let lastCloudSaveSignature = '';
     let cloudAuthPanelOpen = false;
     let pendingCloudDownloadSnapshot = null;
+    let pendingCloudChoiceResolver = null;
     let accountStatusState = { message: '', loading: false, error: false, fading: false };
     let accountStatusFadeTimer = null;
     let accountStatusClearTimer = null;
@@ -7209,17 +7212,22 @@ ${getCleanFeatType(slot.type)}`;
         const displayName = normalizeAccountNickname(row.nickname || nickname);
         const avatar = row.profile_avatar || row.data?.profileAvatar || oldProfile?.avatar || '';
         const sameAccount = accountStorageKey(oldProfile?.nickname || '') === accountStorageKey(displayName);
+        if (!sameAccount) {
+            const canContinue = await confirmLocalCharactersBeforeCloudLogin();
+            if (!canContinue) return;
+        }
         cloudUser = {
             id: hashAccountToUuid(displayName),
             nickname: displayName,
             avatar,
-            autoSync: sameAccount ? !!oldProfile?.autoSync : false
+            autoSync: sameAccount ? !!oldProfile?.autoSync : true
         };
         writeAccountProfile(cloudUser);
         if (input) input.value = '';
         showAccountMenuView();
         closeModal('accountModal');
         updateAccountUI();
+        await requestLoadAccountFromCloud({ buttonId: 'cloud-menu-btn', direction: 'down', skipLocalConfirm: true });
     }
 
     async function loginNicknameAccount() {
@@ -7251,10 +7259,23 @@ ${getCleanFeatType(slot.type)}`;
     async function logoutNicknameAccount() {
         cloudUser = cloudUser || readAccountProfile();
         if (cloudUser) {
-            const saved = await saveAccountToCloud({ logout: true });
-            if (!saved) {
-                updateCloudAuthUI('Не удалось выйти: сначала сохрани данные в облако.');
+            const choice = await openCloudChoiceModal({
+                title: 'Выйти из профиля?',
+                message: 'Сохранить данные в облаке перед выходом?',
+                yes: 'ДА',
+                no: 'НЕТ',
+                cancel: 'ОТМЕНА'
+            });
+            if (choice === 'cancel') {
+                updateCloudAuthUI('Выход отменён');
                 return;
+            }
+            if (choice === 'yes') {
+                const saved = await saveAccountToCloud({ logout: true });
+                if (!saved) {
+                    updateCloudAuthUI('Не удалось выйти: данные не сохранены в облако.');
+                    return;
+                }
             }
         }
         clearLocalCharactersAfterLogout();
@@ -7335,6 +7356,51 @@ ${getCleanFeatType(slot.type)}`;
 
     function updateCloudAuthUI(message = '') {
         updateAccountSummary(message || '');
+    }
+
+    function openCloudChoiceModal({ title = 'Подтверждение', message = '', yes = 'ДА', no = 'НЕТ', cancel = 'ОТМЕНА' } = {}) {
+        if (pendingCloudChoiceResolver) {
+            pendingCloudChoiceResolver('cancel');
+            pendingCloudChoiceResolver = null;
+        }
+        const titleEl = document.getElementById('cloud-choice-title');
+        const messageEl = document.getElementById('cloud-choice-message');
+        const yesEl = document.getElementById('cloud-choice-yes');
+        const noEl = document.getElementById('cloud-choice-no');
+        const cancelEl = document.getElementById('cloud-choice-cancel');
+        if (titleEl) titleEl.innerText = title;
+        if (messageEl) messageEl.innerText = message;
+        if (yesEl) yesEl.innerText = yes;
+        if (noEl) noEl.innerText = no;
+        if (cancelEl) cancelEl.innerText = cancel;
+        openModal('cloudChoiceModal');
+        return new Promise(resolve => {
+            pendingCloudChoiceResolver = resolve;
+        });
+    }
+
+    function confirmCloudChoice(choice) {
+        closeModal('cloudChoiceModal');
+        const resolver = pendingCloudChoiceResolver;
+        pendingCloudChoiceResolver = null;
+        if (resolver) resolver(choice);
+    }
+
+    async function confirmLocalCharactersBeforeCloudLogin() {
+        if (readCharacters(CHARACTER_SCOPE_MAIN).length <= 0) return true;
+        const choice = await openCloudChoiceModal({
+            title: 'Локальные данные будут удалены',
+            message: 'В локальном режиме есть персонажи. Перед загрузкой аккаунта сохранить их в JSON?',
+            yes: 'ДА',
+            no: 'НЕТ',
+            cancel: 'ОТМЕНА'
+        });
+        if (choice === 'cancel') {
+            updateCloudAuthUI('Вход отменён');
+            return false;
+        }
+        if (choice === 'yes') exportAllCharactersJSON();
+        return true;
     }
 
     function formatCloudError(error, fallback = 'ошибка облака') {
@@ -7457,6 +7523,12 @@ ${getCleanFeatType(slot.type)}`;
         };
     }
 
+    function getCloudSnapshotSignature(snapshot) {
+        return JSON.stringify(snapshot || {}, (key, value) => (
+            key === 'savedAt' || key === LOCAL_SHEET_UPDATED_AT_KEY ? undefined : value
+        ));
+    }
+
     function startCloudButtonAnimation(buttonId, direction = 'up') {
         if (!buttonId) return;
         const btn = document.getElementById(buttonId);
@@ -7481,6 +7553,18 @@ ${getCleanFeatType(slot.type)}`;
         document.body.classList.toggle('cloud-busy', !!active);
     }
 
+    function wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function waitForCloudIdle(timeoutMs = 15000) {
+        const startedAt = Date.now();
+        while (cloudLoading && Date.now() - startedAt < timeoutMs) {
+            await wait(120);
+        }
+        return !cloudLoading;
+    }
+
     function forcePersistCurrentAccountLocally() {
         if (!isWorkshopScope() && activeCharacterId) saveCharacterSnapshotById(activeCharacterId, false);
         const mainCharacters = readCharacters(CHARACTER_SCOPE_MAIN);
@@ -7494,12 +7578,31 @@ ${getCleanFeatType(slot.type)}`;
             return false;
         }
         if (!requireNicknameAccount()) return false;
-        if (cloudLoading) return false;
-        startCloudButtonAnimation(options.buttonId || '', options.direction || 'up');
+        const isAutoSave = !!options.auto;
+        if (cloudLoading) {
+            if (isAutoSave) return false;
+            const idle = await waitForCloudIdle();
+            if (!idle) {
+                updateCloudAuthUI('Облако занято автосохранением, попробуй ещё раз.');
+                return false;
+            }
+        }
+        let snapshot = null;
+        cloudAutosaveSuppressed = true;
+        try {
+            snapshot = buildAccountSnapshot();
+        } finally {
+            cloudAutosaveSuppressed = false;
+        }
+        const signature = getCloudSnapshotSignature(snapshot);
+        if (isAutoSave && signature === lastCloudSaveSignature) {
+            return true;
+        }
+        const animationButtonId = options.buttonId || (isAutoSave ? 'cloud-menu-btn' : '');
+        startCloudButtonAnimation(animationButtonId, options.direction || 'up');
         cloudLoading = true;
-        setCloudBusy(true);
-        const snapshot = buildAccountSnapshot();
-        setCloudSyncStatus(options.logout ? 'Сохранение в облако' : (options.auto ? 'Сохранение в облако' : 'Сохранение в облако'));
+        if (!isAutoSave) setCloudBusy(true);
+        if (!isAutoSave) setCloudSyncStatus(options.logout ? 'Сохранение в облако' : 'Сохранение в облако');
         const nicknameKey = accountStorageKey(cloudUser.nickname);
         const payload = {
             nickname_key: nicknameKey,
@@ -7512,26 +7615,36 @@ ${getCleanFeatType(slot.type)}`;
             const { data: savedRow, error } = await cloudApiRequest('POST', nicknameKey, payload, 'Сохранение в облако');
             if (error) {
                 console.warn('Cloud account save error', error);
-                updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
+                if (!isAutoSave) updateCloudAuthUI(`Не удалось сохранить: ${formatCloudError(error)}`);
                 return false;
             }
             if (!savedRow?.ok) {
-                updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
+                if (!isAutoSave) updateCloudAuthUI('Запрос прошёл, но облако не подтвердило сохранение');
                 return false;
             }
+            lastCloudSaveSignature = signature;
+            cloudAutosaveSuppressed = true;
             forcePersistCurrentAccountLocally();
-            updateCloudAuthUI('Сохранение в облако');
+            cloudAutosaveSuppressed = false;
+            if (!isAutoSave) updateCloudAuthUI('Сохранение в облако');
             return true;
         } finally {
+            cloudAutosaveSuppressed = false;
             cloudLoading = false;
-            setCloudBusy(false);
-            stopCloudButtonAnimation(options.buttonId || '');
+            if (!isAutoSave) setCloudBusy(false);
+            stopCloudButtonAnimation(animationButtonId);
         }
     }
 
     async function requestLoadAccountFromCloud(options = {}) {
         if (!requireNicknameAccount()) return;
-        if (cloudLoading) return;
+        if (cloudLoading) {
+            const idle = await waitForCloudIdle();
+            if (!idle) {
+                updateCloudAuthUI('Облако занято автосохранением, попробуй ещё раз.');
+                return;
+            }
+        }
         cloudLoading = true;
         setCloudBusy(true);
         startCloudButtonAnimation(options.buttonId || '', options.direction || 'down');
@@ -7551,7 +7664,7 @@ ${getCleanFeatType(slot.type)}`;
             }
             pendingCloudDownloadSnapshot = snapshot;
             const hasLocalCharacters = readCharacters(CHARACTER_SCOPE_MAIN).length > 0;
-            if (hasLocalCharacters) openModal('cloudConfirmModal');
+            if (hasLocalCharacters && !options.skipLocalConfirm) openModal('cloudConfirmModal');
             else confirmCloudDownload(true);
         } finally {
             cloudLoading = false;
@@ -7612,6 +7725,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         document.body.classList.add('main-menu-open');
         renderCharacterMenu();
+        lastCloudSaveSignature = getCloudSnapshotSignature(snapshot);
         updateAccountUI('Данные облака загружены');
         if (appRouteReady) setRoute('menu', null, true);
     }
@@ -7641,16 +7755,31 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function scheduleCloudSave() {
-        return;
+        if (cloudAutosaveSuppressed || isWorkshopScope() || isLoadingSheet || !isAccountAutoSyncEnabled()) return;
+        if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+        cloudSyncTimer = setTimeout(async () => {
+            cloudSyncTimer = null;
+            if (cloudLoading) {
+                scheduleCloudSave();
+                return;
+            }
+            if (isLoadingSheet || isWorkshopScope() || !isAccountAutoSyncEnabled()) return;
+            await saveAccountToCloud({ auto: true });
+        }, 1400);
     }
 
     async function flushCloudSave() {
+        const hadTimer = !!cloudSyncTimer;
         if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
         cloudSyncTimer = null;
+        if (hadTimer && !cloudLoading && !isLoadingSheet && !isWorkshopScope() && isAccountAutoSyncEnabled()) {
+            await saveAccountToCloud({ auto: true });
+        }
     }
 
     async function saveCharacterToCloud() {
-        return;
+        if (isWorkshopScope() || isLoadingSheet || !isAccountAutoSyncEnabled()) return false;
+        return saveAccountToCloud({ auto: true });
     }
     function createBlankSheetData(name = 'Новый герой') {
         const defaultLevel = 1;
@@ -7907,7 +8036,6 @@ ${getCleanFeatType(slot.type)}`;
             event.stopPropagation();
         }
         if (!requireNicknameAccount()) return;
-        if (cloudLoading) return;
         characterMenuOpenId = null;
         characterToolbarMenuOpen = false;
         cloudActionMenuOpen = !cloudActionMenuOpen;
@@ -8009,6 +8137,7 @@ ${getCleanFeatType(slot.type)}`;
         selectedMobileReorder = null;
         writeCharacters();
         safeStorageSet(getActiveCharacterKey(), activeCharacterId || '', false);
+        if (!isWorkshopScope()) scheduleCloudSave();
         renderCharacterMenu();
         if (!characters.length || !activeCharacterId) setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, true);
     }
@@ -8202,6 +8331,7 @@ ${getCleanFeatType(slot.type)}`;
         writeCharacterSheet(id, sheet);
         characters.push(row ? cloudRowToCharacter(row) : { id, ...getCharacterMetaFromSheet(sheet) });
         writeCharacters();
+        if (!isWorkshopScope()) scheduleCloudSave();
         document.body.classList.add('main-menu-open');
         setRoute(isWorkshopScope() ? 'workshop' : 'menu', null, true);
         renderCharacterMenu();
@@ -8228,6 +8358,7 @@ ${getCleanFeatType(slot.type)}`;
         if (avatar) safeStorageSet(characterAvatarKey(newId), avatar, false);
         characters.push(row ? cloudRowToCharacter(row) : { id: newId, ...getCharacterMetaFromSheet(sheet) });
         writeCharacters();
+        if (!isWorkshopScope()) scheduleCloudSave();
         renderCharacterMenu();
     }
 
@@ -8667,6 +8798,7 @@ ${getCleanFeatType(slot.type)}`;
         exportAllCharactersJSON,
         startImportCharacterAsNew,
         confirmCloudDownload,
+        confirmCloudChoice,
         syncAttackDamageBonusControls,
         syncEquipmentDamageBonusControls,
         openModal,

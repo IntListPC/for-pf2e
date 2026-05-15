@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.04">
+    <link rel="stylesheet" href="css/styles.css?v=1.04-cloudfix">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -118,6 +118,16 @@
     <div class="cloud-confirm-actions">
         <button type="button" onclick="confirmCloudDownload(true)" class="btn-primary">ДА</button>
         <button type="button" onclick="confirmCloudDownload(false)" class="btn-sec">НЕТ</button>
+    </div>
+</div></div>
+
+<div id="cloudChoiceModal" class="modal"><div class="modal-content cloud-confirm-modal">
+    <h3 id="cloud-choice-title">Подтверждение</h3>
+    <p id="cloud-choice-message"></p>
+    <div class="cloud-confirm-actions cloud-choice-actions">
+        <button type="button" id="cloud-choice-yes" onclick="confirmCloudChoice('yes')" class="btn-primary">ДА</button>
+        <button type="button" id="cloud-choice-no" onclick="confirmCloudChoice('no')" class="btn-sec">НЕТ</button>
+        <button type="button" id="cloud-choice-cancel" onclick="confirmCloudChoice('cancel')" class="btn-sec">ОТМЕНА</button>
     </div>
 </div></div>
 
@@ -501,15 +511,14 @@
 
     <select id="atk-type"></select>
     <div class="attack-damage-bonus-row">
-        <label class="equipment-inline-toggle" for="atk-damage-bonus-enabled">
-            <input type="checkbox" id="atk-damage-bonus-enabled" onchange="syncAttackDamageBonusControls()">
-            <span>Добавить урон</span>
-        </label>
         <select id="atk-damage-bonus-mode" onchange="syncAttackDamageBonusControls()">
             <option value="str">От силы</option>
             <option value="custom">Своё</option>
         </select>
         <input type="number" id="atk-damage-bonus-value" value="0" step="1" placeholder="0">
+        <label class="attack-damage-bonus-check" for="atk-damage-bonus-enabled" title="Доп. урон">
+            <input type="checkbox" id="atk-damage-bonus-enabled" onchange="syncAttackDamageBonusControls()">
+        </label>
     </div>
 
     <div class="equipment-segment">
@@ -760,15 +769,14 @@
         <label class="l" style="margin-top:8px;">Тип урона</label>
         <select id="equipment-weapon-damage-type"></select>
         <div class="attack-damage-bonus-row">
-            <label class="equipment-inline-toggle" for="equipment-weapon-damage-bonus-enabled">
-                <input type="checkbox" id="equipment-weapon-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
-                <span>Добавить урон</span>
-            </label>
             <select id="equipment-weapon-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
                 <option value="str">От силы</option>
                 <option value="custom">Своё</option>
             </select>
             <input type="number" id="equipment-weapon-damage-bonus-value" value="0" step="1" placeholder="0">
+            <label class="attack-damage-bonus-check" for="equipment-weapon-damage-bonus-enabled" title="Доп. урон">
+                <input type="checkbox" id="equipment-weapon-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
+            </label>
         </div>
         <button type="button" id="equipment-weapon-tags-toggle-btn" class="btn-sec atk-modal-tags-toggle" onclick="toggleEquipmentWeaponTagsSection()">ХЕШТЕГИ ▼</button>
         <div id="equipment-weapon-tags-section" class="atk-modal-tags-wrap">
@@ -795,15 +803,14 @@
             <label class="l" style="margin-top:8px;">Тип урона</label>
             <select id="equipment-weapon2-damage-type"></select>
             <div class="attack-damage-bonus-row">
-                <label class="equipment-inline-toggle" for="equipment-weapon2-damage-bonus-enabled">
-                    <input type="checkbox" id="equipment-weapon2-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
-                    <span>Добавить урон</span>
-                </label>
                 <select id="equipment-weapon2-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
                     <option value="str">От силы</option>
                     <option value="custom">Своё</option>
                 </select>
                 <input type="number" id="equipment-weapon2-damage-bonus-value" value="0" step="1" placeholder="0">
+                <label class="attack-damage-bonus-check" for="equipment-weapon2-damage-bonus-enabled" title="Доп. урон">
+                    <input type="checkbox" id="equipment-weapon2-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
+                </label>
             </div>
         </div>
     </div>
@@ -1161,7 +1168,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.04-dmgbonus"></script>
+<script src="js/app.js?v=1.04-cloudfix3"></script>
 
 <div class="footer-spacer"></div>
 </body>

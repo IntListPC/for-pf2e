@@ -7468,6 +7468,7 @@ ${getCleanFeatType(slot.type)}`;
     async function initCloud() {
         cloudUser = readAccountProfile();
         updateAccountUI();
+        await offerCloudLoadIfDifferentOnStartup();
     }
 
     async function fetchAccountBackupRow() {
@@ -7527,6 +7528,50 @@ ${getCleanFeatType(slot.type)}`;
         return JSON.stringify(snapshot || {}, (key, value) => (
             key === 'savedAt' || key === LOCAL_SHEET_UPDATED_AT_KEY ? undefined : value
         ));
+    }
+
+    function buildLocalCloudSignatureSnapshot() {
+        if (!cloudUser) return null;
+        cloudAutosaveSuppressed = true;
+        try {
+            return buildAccountSnapshot();
+        } finally {
+            cloudAutosaveSuppressed = false;
+        }
+    }
+
+    async function offerCloudLoadIfDifferentOnStartup() {
+        if (!cloudUser || isWorkshopScope() || cloudLoading) return;
+        const localSnapshot = buildLocalCloudSignatureSnapshot();
+        const localSignature = getCloudSnapshotSignature(localSnapshot);
+        const { data: row, error } = await fetchAccountBackupRow();
+        if (error) {
+            console.warn('Startup cloud compare error', error);
+            lastCloudSaveSignature = localSignature;
+            return;
+        }
+        const cloudSnapshot = row?.data || null;
+        if (!cloudSnapshot || !Array.isArray(cloudSnapshot.characters)) {
+            lastCloudSaveSignature = localSignature;
+            return;
+        }
+        const cloudSignature = getCloudSnapshotSignature(cloudSnapshot);
+        if (cloudSignature === localSignature) {
+            lastCloudSaveSignature = localSignature;
+            return;
+        }
+        const choice = await openCloudChoiceModal({
+            title: 'Данные в облаке отличаются',
+            message: 'В облаке есть данные, которые отличаются от текущих данных профиля. Загрузить данные из облака?',
+            yes: 'ДА',
+            no: 'НЕТ',
+            cancel: 'ОТМЕНА'
+        });
+        if (choice === 'yes') {
+            applyCloudSnapshot(cloudSnapshot);
+        } else {
+            lastCloudSaveSignature = localSignature;
+        }
     }
 
     function startCloudButtonAnimation(buttonId, direction = 'up') {

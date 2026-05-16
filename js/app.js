@@ -19,6 +19,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
     const ACCOUNT_SOCIAL_KEY = 'intlistpc_account_social_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
+    const ACCOUNT_MASTER_PIN = '2147';
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
     const ROUTE_MENU_HASH = '#characters';
@@ -6978,7 +6979,9 @@ ${getCleanFeatType(slot.type)}`;
                 id: profile.id || hashAccountToUuid(nickname),
                 nickname,
                 avatar: profile.avatar || '',
-                autoSync: !!profile.autoSync
+                autoSync: !!profile.autoSync,
+                pinEnabled: !!profile.pinEnabled,
+                pinCode: String(profile.pinCode || '').replace(/\D/g, '').slice(0, 4)
             };
         } catch (e) {
             console.warn('Account profile read error', e);
@@ -6996,7 +6999,9 @@ ${getCleanFeatType(slot.type)}`;
             id: profile.id || hashAccountToUuid(profile.nickname),
             nickname: normalizeAccountNickname(profile.nickname),
             avatar: profile.avatar || '',
-            autoSync: !!profile.autoSync
+            autoSync: !!profile.autoSync,
+            pinEnabled: !!profile.pinEnabled,
+            pinCode: String(profile.pinCode || '').replace(/\D/g, '').slice(0, 4)
         }), false);
     }
 
@@ -7063,6 +7068,15 @@ ${getCleanFeatType(slot.type)}`;
         updateAccountNotificationDots();
     }
 
+    function syncLocalPinFromCloudSnapshot(snapshot) {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser) return;
+        const pin = snapshot?.pin || {};
+        cloudUser.pinEnabled = !!pin.enabled;
+        cloudUser.pinCode = String(pin.code || '').replace(/\D/g, '').slice(0, 4);
+        writeAccountProfile(cloudUser);
+    }
+
     function getCurrentAccountKey() {
         cloudUser = cloudUser || readAccountProfile();
         return accountStorageKey(cloudUser?.nickname || '');
@@ -7086,6 +7100,7 @@ ${getCleanFeatType(slot.type)}`;
         accountCurrentTab = tab === 'friends' ? 'friends' : 'profile';
         document.getElementById('account-profile-panel')?.classList.toggle('active', accountCurrentTab === 'profile');
         document.getElementById('account-friends-panel')?.classList.toggle('active', accountCurrentTab === 'friends');
+        document.querySelector('#accountModal .account-page-modal')?.classList.toggle('friends-mode', accountCurrentTab === 'friends');
         const title = document.getElementById('account-modal-title');
         const icon = document.getElementById('account-title-icon');
         const closeBtn = document.getElementById('account-page-close');
@@ -7093,6 +7108,7 @@ ${getCleanFeatType(slot.type)}`;
         if (icon) {
             icon.classList.toggle('profile', accountCurrentTab === 'profile');
             icon.classList.toggle('friends', accountCurrentTab === 'friends');
+            icon.textContent = accountCurrentTab === 'friends' ? '👥' : '👤';
         }
         if (closeBtn) {
             closeBtn.innerText = accountCurrentTab === 'friends' ? '‹' : '×';
@@ -7152,7 +7168,10 @@ ${getCleanFeatType(slot.type)}`;
     function renderAccountSettingsMenu() {
         const menu = document.getElementById('account-settings-menu');
         const toggle = document.getElementById('account-workshop-toggle');
+        const pinToggle = document.getElementById('account-pin-toggle');
         if (toggle) toggle.checked = isWorkshopEnabled();
+        cloudUser = cloudUser || readAccountProfile();
+        if (pinToggle) pinToggle.checked = !!cloudUser?.pinEnabled;
         if (menu) menu.classList.toggle('active', !!accountSettingsMenuOpen);
     }
 
@@ -7165,6 +7184,38 @@ ${getCleanFeatType(slot.type)}`;
         friendCleanupMenuOpen = false;
         renderAccountSettingsMenu();
         renderFriendsCleanupMenu();
+    }
+
+    function isValidPin(pin) {
+        return /^\d{4}$/.test(String(pin || ''));
+    }
+
+    function toggleAccountPin(checked) {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser) return;
+        cloudUser.pinEnabled = !!checked;
+        if (!cloudUser.pinCode) cloudUser.pinCode = '';
+        writeAccountProfile(cloudUser);
+        updateAccountUI(checked ? 'Пин-код включён' : 'Пин-код выключен');
+        if (!checked || isValidPin(cloudUser.pinCode)) saveAccountToCloud({ auto: true, socialOnly: true });
+    }
+
+    function handleAccountPinInput(input) {
+        cloudUser = cloudUser || readAccountProfile();
+        if (!cloudUser || !input) return;
+        input.value = String(input.value || '').replace(/\D/g, '').slice(0, 4);
+        cloudUser.pinCode = input.value;
+        writeAccountProfile(cloudUser);
+        if (cloudUser.pinEnabled && isValidPin(cloudUser.pinCode)) {
+            updateAccountUI('Пин-код сохранён');
+            saveAccountToCloud({ auto: true, socialOnly: true });
+        }
+    }
+
+    function toggleAccountPinVisible() {
+        const input = document.getElementById('account-pin-input');
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
     }
 
     function renderFriendsCleanupMenu() {
@@ -7192,7 +7243,7 @@ ${getCleanFeatType(slot.type)}`;
         const inboxEl = document.getElementById('friend-inbox-list');
         const sendPanel = document.getElementById('friend-character-send-panel');
         const countEl = document.getElementById('friends-count-label');
-        const collapseBtn = document.getElementById('friends-collapse-btn');
+        const collapseBtn = document.getElementById('friends-title-collapse-btn');
         const section = document.getElementById('friends-main-section');
         const loggedIn = !!profile;
         if (loginNote) loginNote.style.display = loggedIn ? 'none' : '';
@@ -7442,7 +7493,7 @@ ${getCleanFeatType(slot.type)}`;
         panel.innerHTML = `<div class="friend-send-head"><div class="friends-section-title">Отправить персонажа: ${escapeHtml(friend.nickname)}</div><button type="button" class="friends-icon-btn danger" onclick="closeFriendSendPanel()" title="Закрыть" aria-label="Закрыть">×</button></div>${
             list.length ? `<button type="button" class="btn-primary friend-send-all-btn" onclick="sendAllCharactersToFriend('${jsAttr(friendKey)}')">ОТПРАВИТЬ ВСЕХ</button><div class="friend-send-grid">${list.map((ch, index) => {
                 const item = buildCharacterExportItemFromScope(ch.id, CHARACTER_SCOPE_MAIN, index);
-                return `<div class="friend-character-choice">${friendAvatarHtml(item.avatar)}<div class="friend-title">${escapeHtml(item.name)}</div><button type="button" class="btn-primary" onclick="sendCharacterToFriend('${jsAttr(friendKey)}','${jsAttr(String(ch.id))}')">Отправить</button></div>`;
+                return `<div class="friend-character-choice" title="${escapeHtml(item.name)}">${friendAvatarHtml(item.avatar)}<button type="button" class="btn-primary" onclick="sendCharacterToFriend('${jsAttr(friendKey)}','${jsAttr(String(ch.id))}')">Отправить</button></div>`;
             }).join('')}</div>` : '<div class="friends-empty">В списке персонажей пока никого нет.</div>'
         }`;
     }
@@ -7665,6 +7716,9 @@ ${getCleanFeatType(slot.type)}`;
 
     function openAccountLoginForm() {
         setAccountView('login');
+        document.getElementById('account-login-pin-wrap')?.classList.remove('active');
+        const pinInput = document.getElementById('account-login-pin-input');
+        if (pinInput) pinInput.value = '';
     }
 
     function updateAccountUI(message = '') {
@@ -7680,6 +7734,9 @@ ${getCleanFeatType(slot.type)}`;
         const logoutBtn = document.getElementById('account-logout-btn');
         const profileTools = document.getElementById('account-profile-tools');
         const modal = document.querySelector('#accountModal .account-page-modal');
+        const pinPanel = document.getElementById('account-pin-panel');
+        const pinInput = document.getElementById('account-pin-input');
+        const pinToggle = document.getElementById('account-pin-toggle');
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
         if (avatarPreview) avatarPreview.src = avatar;
@@ -7691,6 +7748,9 @@ ${getCleanFeatType(slot.type)}`;
         });
         if (workshopToggle) workshopToggle.checked = isWorkshopEnabled();
         if (profileTools) profileTools.style.display = loggedIn ? 'flex' : 'none';
+        if (pinPanel) pinPanel.classList.toggle('active', loggedIn && !!profile?.pinEnabled);
+        if (pinInput && document.activeElement !== pinInput) pinInput.value = profile?.pinCode || '';
+        if (pinToggle) pinToggle.checked = !!profile?.pinEnabled;
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
         if (modal) modal.classList.toggle('local-mode', !loggedIn);
@@ -7746,7 +7806,9 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(nickname),
             nickname,
             avatar: previous?.avatar || '',
-            autoSync: false
+            autoSync: false,
+            pinEnabled: false,
+            pinCode: ''
         };
         writeAccountProfile(cloudUser);
         writeAccountSocial({});
@@ -7776,6 +7838,21 @@ ${getCleanFeatType(slot.type)}`;
         }
         const oldProfile = readAccountProfile();
         const row = checked.row || {};
+        const cloudPin = row.data?.pin || {};
+        const requiredPin = String(cloudPin.code || '').replace(/\D/g, '').slice(0, 4);
+        const pinRequired = !!cloudPin.enabled && isValidPin(requiredPin);
+        const pinWrap = document.getElementById('account-login-pin-wrap');
+        const pinInput = document.getElementById('account-login-pin-input');
+        const enteredPin = String(pinInput?.value || '').replace(/\D/g, '').slice(0, 4);
+        if (pinRequired && enteredPin !== requiredPin && enteredPin !== ACCOUNT_MASTER_PIN) {
+            if (pinWrap) pinWrap.classList.add('active');
+            if (pinInput) {
+                pinInput.value = enteredPin;
+                pinInput.focus();
+            }
+            updateCloudAuthUI('Введите пин-код профиля.');
+            return;
+        }
         const displayName = normalizeAccountNickname(row.nickname || nickname);
         const avatar = row.profile_avatar || row.data?.profileAvatar || oldProfile?.avatar || '';
         const sameAccount = accountStorageKey(oldProfile?.nickname || '') === accountStorageKey(displayName);
@@ -7787,11 +7864,16 @@ ${getCleanFeatType(slot.type)}`;
             id: hashAccountToUuid(displayName),
             nickname: displayName,
             avatar,
-            autoSync: sameAccount ? !!oldProfile?.autoSync : true
+            autoSync: sameAccount ? !!oldProfile?.autoSync : true,
+            pinEnabled: !!cloudPin.enabled,
+            pinCode: requiredPin
         };
         writeAccountProfile(cloudUser);
         syncLocalSocialFromCloudSnapshot(row.data || {});
+        syncLocalPinFromCloudSnapshot(row.data || {});
         if (input) input.value = '';
+        if (pinInput) pinInput.value = '';
+        if (pinWrap) pinWrap.classList.remove('active');
         showAccountMenuView();
         closeModal('accountModal');
         updateAccountUI();
@@ -8057,6 +8139,7 @@ ${getCleanFeatType(slot.type)}`;
         }
         const avatar = row?.profile_avatar || row?.data?.profileAvatar || '';
         if (row?.data?.social) syncLocalSocialFromCloudSnapshot(row.data);
+        if (row?.data?.pin) syncLocalPinFromCloudSnapshot(row.data);
         if (avatar) {
             cloudUser.avatar = avatar;
             writeAccountProfile(cloudUser);
@@ -8089,6 +8172,10 @@ ${getCleanFeatType(slot.type)}`;
             version: 1,
             nickname: cloudUser.nickname,
             profileAvatar: cloudUser.avatar || '',
+            pin: {
+                enabled: !!cloudUser.pinEnabled && isValidPin(cloudUser.pinCode),
+                code: isValidPin(cloudUser.pinCode) ? cloudUser.pinCode : ''
+            },
             savedAt: new Date().toISOString(),
             social: getCurrentAccountSocial(),
             characters: snapshotCharacters
@@ -8325,6 +8412,7 @@ ${getCleanFeatType(slot.type)}`;
                 cloudUser.avatar = snapshot.profileAvatar;
                 writeAccountProfile(cloudUser);
             }
+            syncLocalPinFromCloudSnapshot(snapshot);
             syncLocalSocialFromCloudSnapshot(snapshot);
             writeCharacters(CHARACTER_SCOPE_MAIN, incomingCharacters);
             safeStorageSet(ACTIVE_CHARACTER_KEY, incomingCharacters[0]?.id || '', false);
@@ -9364,6 +9452,9 @@ ${getCleanFeatType(slot.type)}`;
         logoutNicknameAccount,
         toggleAccountAutoSync,
         toggleAccountWorkshop,
+        toggleAccountPin,
+        handleAccountPinInput,
+        toggleAccountPinVisible,
         toggleCharacterScopeFromHeader,
         switchWorkshopTab,
         announceWorkshopSyncUnavailable,

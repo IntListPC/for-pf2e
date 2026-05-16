@@ -74,29 +74,42 @@
 <div id="accountModal" class="modal"><div class="modal-content account-modal account-page-modal">
     <div class="account-page-head">
         <div class="account-title-wrap">
-            <span id="account-title-icon" class="account-title-icon profile" aria-hidden="true"><span></span></span>
+            <span id="account-title-icon" class="account-title-icon profile" aria-hidden="true">👤</span>
             <h3 id="account-modal-title">Профиль</h3>
+            <button type="button" id="friends-title-collapse-btn" class="friends-title-collapse-btn" onclick="toggleFriendsListCollapsed()" title="Свернуть друзей" aria-label="Свернуть друзей">›</button>
         </div>
         <button type="button" id="account-page-close" onclick="handleAccountCloseButton()" class="account-page-close" title="Закрыть" aria-label="Закрыть">×</button>
     </div>
 
     <div id="account-profile-panel" class="account-panel active">
         <div id="account-menu-view" class="account-view active">
+            <div id="account-profile-main" class="account-profile-main">
             <button type="button" class="account-avatar-preview" onclick="openProfileAvatarPicker()" title="Сменить аватарку" aria-label="Сменить аватарку"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></button>
-            <div id="account-nickname-label" class="account-nickname-label">Лакал. Режим</div>
-            <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
-
-            <div id="account-profile-tools" class="account-profile-tools">
-                <button type="button" class="account-tool-btn" onclick="toggleAccountSettingsMenu(event)" title="Настройки" aria-label="Настройки">⚙</button>
-                <button type="button" id="account-friends-btn" class="account-tool-btn friend" onclick="switchAccountTab('friends')" title="Друзья" aria-label="Друзья"><span class="account-title-icon friends" aria-hidden="true"><span></span></span><i class="account-notification-dot"></i></button>
-                <div id="account-settings-menu" class="character-context-menu account-settings-menu" onclick="event.stopPropagation()">
-                    <label class="account-mini-toggle" for="account-workshop-toggle">
-                        <span>Мастерская</span>
-                        <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
-                        <b></b>
-                    </label>
+            <div class="account-profile-side">
+                <div id="account-profile-tools" class="account-profile-tools">
+                    <button type="button" class="account-tool-btn" onclick="toggleAccountSettingsMenu(event)" title="Настройки" aria-label="Настройки"><span>⚙</span><b>Настройки</b></button>
+                    <button type="button" id="account-friends-btn" class="account-tool-btn friend" onclick="switchAccountTab('friends')" title="Друзья" aria-label="Друзья"><span>👥</span><b>Друзья</b><i class="account-notification-dot"></i></button>
+                    <div id="account-settings-menu" class="character-context-menu account-settings-menu" onclick="event.stopPropagation()">
+                        <label class="account-mini-toggle" for="account-workshop-toggle">
+                            <span>Мастерская</span>
+                            <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
+                            <b></b>
+                        </label>
+                        <label class="account-mini-toggle" for="account-pin-toggle">
+                            <span>Пин-код</span>
+                            <input type="checkbox" id="account-pin-toggle" onchange="toggleAccountPin(this.checked)">
+                            <b></b>
+                        </label>
+                    </div>
+                </div>
+                <div id="account-pin-panel" class="account-pin-panel">
+                    <input type="password" id="account-pin-input" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000" oninput="handleAccountPinInput(this)">
+                    <button type="button" id="account-pin-eye" onclick="toggleAccountPinVisible()" title="Показать пин-код" aria-label="Показать пин-код">👁</button>
                 </div>
             </div>
+            </div>
+            <div id="account-nickname-label" class="account-nickname-label">Лакал. Режим</div>
+            <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
 
             <div id="account-menu-actions" class="account-menu-actions">
                 <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
@@ -115,6 +128,10 @@
         <div id="account-login-view" class="account-view">
             <label class="l">Имя существующего аккаунта</label>
             <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
+            <div id="account-login-pin-wrap" class="account-login-pin-wrap">
+                <label class="l">Пин-код</label>
+                <input type="password" id="account-login-pin-input" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)">
+            </div>
             <button type="button" onclick="loginExistingNicknameAccount()" class="btn-primary">ВОЙТИ</button>
             <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
         </div>
@@ -127,7 +144,7 @@
                 <div id="friends-count-label" class="friends-count-label">0/16</div>
                 <div id="friends-status" class="friends-status"></div>
                 <div class="friends-top-actions">
-                    <button type="button" id="friends-collapse-btn" class="friends-icon-btn" onclick="toggleFriendsListCollapsed()" title="Список друзей" aria-label="Список друзей">⌄</button>
+                    <button type="button" id="friend-inbox-btn" class="friends-icon-btn" onclick="openFriendInboxModal()" title="Отправления" aria-label="Отправления">↓<i class="account-notification-dot"></i></button>
                     <button type="button" class="friends-icon-btn danger" onclick="toggleFriendsCleanupMenu(event)" title="Очистка" aria-label="Очистка">×</button>
                     <div id="friends-cleanup-menu" class="character-context-menu friends-cleanup-menu" onclick="event.stopPropagation()">
                         <button type="button" onclick="clearFriendRequests()">Удалить заявки</button>
@@ -139,7 +156,6 @@
             <div class="friends-action-row">
                 <button type="button" class="friends-action-btn" onclick="openFriendSearchModal()">Найти<i class="account-notification-dot"></i></button>
                 <button type="button" id="friend-requests-btn" class="friends-action-btn" onclick="openFriendRequestsModal()">Заявки<i class="account-notification-dot"></i></button>
-                <button type="button" id="friend-inbox-btn" class="friends-action-btn icon" onclick="openFriendInboxModal()" title="Отправления" aria-label="Отправления">↓<i class="account-notification-dot"></i></button>
             </div>
             <div id="friends-main-section" class="friends-section friends-main-section">
                 <div class="friends-section-title">Друзья</div>

@@ -2602,6 +2602,7 @@ body.battle-sheet-embed .feat-card {
 .cloud-auto-toggle { grid-template-columns: minmax(0, 1fr) 48px; margin-bottom: 4px; }
 .account-page-modal.local-mode .account-avatar-preview,
 .account-page-modal.local-mode .account-nickname-label,
+.account-page-modal.local-mode .account-profile-main,
 .account-page-modal.local-mode .account-profile-tools,
 .account-page-modal.local-mode #account-logout-btn,
 .account-page-modal.local-mode .account-title-icon { display: none !important; }
@@ -2643,4 +2644,177 @@ body.battle-sheet-embed .feat-card {
     .friends-topline { grid-template-columns: 58px minmax(0, 1fr) auto; }
     .friends-list.collapsed { grid-template-columns: repeat(4, 48px); gap: 7px; }
     .friend-avatar-only { width: 48px; height: 48px; border-radius: 14px; }
+}
+
+/* 1.5 profile/friends refinement */
+.account-page-modal.friends-mode .friends-title-collapse-btn {
+    display: inline-flex;
+}
+.friends-title-collapse-btn {
+    display: none;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(148, 163, 184, 0.11);
+    color: #e5edff;
+    font-size: 30px;
+    font-weight: 950;
+    line-height: 1;
+}
+.account-title-icon,
+.account-title-icon.profile,
+.account-title-icon.friends {
+    font-size: 20px;
+    line-height: 1;
+    overflow: hidden;
+}
+.account-title-icon::before,
+.account-title-icon::after,
+.account-title-icon span::before,
+.account-title-icon span::after {
+    content: none !important;
+    display: none !important;
+}
+.account-profile-main {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0 10px;
+}
+.account-profile-main .account-avatar-preview {
+    width: 108px;
+    height: 108px;
+    margin: 0;
+}
+.account-profile-side {
+    min-width: 0;
+    display: grid;
+    gap: 10px;
+}
+.account-profile-tools {
+    width: 100%;
+    justify-content: stretch;
+    gap: 9px;
+    margin: 0;
+}
+.account-tool-btn {
+    width: auto;
+    height: 48px;
+    flex: 1 1 0;
+    padding: 0 12px;
+    gap: 7px;
+    border-radius: 15px;
+    font-size: 13px;
+}
+.account-tool-btn > span {
+    font-size: 20px;
+    line-height: 1;
+}
+.account-tool-btn > b {
+    display: inline;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.account-settings-menu {
+    left: auto;
+    right: 0 !important;
+    transform: none;
+}
+.account-pin-panel {
+    display: none;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    gap: 8px;
+}
+.account-pin-panel.active {
+    display: grid;
+}
+.account-pin-panel input {
+    margin: 0;
+    min-height: 42px;
+    text-align: center;
+    letter-spacing: 0.18em;
+}
+.account-pin-panel button {
+    min-height: 42px;
+    padding: 0;
+    border-radius: 13px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text);
+    font-size: 18px;
+}
+.account-login-pin-wrap {
+    display: none;
+    margin-top: 10px;
+}
+.account-login-pin-wrap.active {
+    display: block;
+}
+.account-login-pin-wrap input {
+    text-align: center;
+    letter-spacing: 0.18em;
+}
+.friends-topline {
+    min-height: 52px;
+    grid-template-columns: 70px minmax(0, 1fr) auto;
+    padding: 8px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 16px;
+    background: rgba(255,255,255,0.045);
+}
+.friends-action-row {
+    grid-template-columns: 1fr 1fr;
+    margin: 12px 0;
+}
+.friends-top-actions {
+    align-items: center;
+}
+.friends-main-section {
+    margin-top: 0;
+}
+.friend-send-panel {
+    background: rgba(139, 92, 246, 0.13);
+}
+.friend-character-choice {
+    grid-template-columns: 52px minmax(0, 1fr);
+    min-width: 0;
+}
+.friend-character-choice .friend-avatar {
+    width: 52px;
+    height: 52px;
+}
+.friend-character-choice button {
+    width: 100%;
+    min-width: 0;
+}
+@media (max-width: 640px) {
+    .account-profile-main {
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 10px;
+    }
+    .account-profile-main .account-avatar-preview {
+        width: 92px;
+        height: 92px;
+    }
+    .account-tool-btn {
+        height: 44px;
+        font-size: 12px;
+        padding: 0 9px;
+    }
+    .friends-topline {
+        grid-template-columns: 56px minmax(0, 1fr) auto;
+        padding: 7px;
+    }
+    .friend-send-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }

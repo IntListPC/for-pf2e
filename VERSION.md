@@ -2,6 +2,8 @@
 
 Current version: `1.4.1`
 
+`1.5` - Profile controls moved into compact settings/friends buttons; friends gained notification dots, separate search/request/inbox windows, collapsible friend avatars, cleanup menus, and send-all character delivery.
+
 `1.4.2` - Profile modal rebuilt as a profile page with a Friends tab; cloud profile snapshots now carry friends, friend requests, and incoming character sends.
 
 `1.4.1` - Version label updated; on page refresh or a new visit, logged-in accounts now compare the cloud snapshot with the current local profile and offer to load cloud data only when they differ.

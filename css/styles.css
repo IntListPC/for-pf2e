@@ -2492,3 +2492,155 @@ body.battle-sheet-embed .feat-card {
     .friend-actions { grid-column: 1 / -1; justify-content: stretch; }
     .friend-actions button { flex: 1 1 0; }
 }
+
+/* 1.5 account shell */
+.site-icon-mark { position: relative; }
+.site-icon-mark.has-account-alert::after,
+.account-tool-btn.has-alert .account-notification-dot,
+.friends-action-btn.has-alert .account-notification-dot {
+    opacity: 1;
+    transform: scale(1);
+}
+.site-icon-mark.has-account-alert::after,
+.account-notification-dot {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: -2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: #ef4444;
+    border: 2px solid #1f2937;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.55);
+    opacity: 0;
+    transform: scale(0.55);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.site-icon-mark.has-account-alert::after {
+    opacity: 1;
+    transform: scale(1);
+}
+.account-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.account-title-icon { width: 33px; height: 33px; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.28); background: rgba(139, 92, 246, 0.13); position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.account-title-icon::before,
+.account-title-icon::after,
+.account-title-icon span::before,
+.account-title-icon span::after { content: ''; position: absolute; display: block; }
+.account-title-icon.profile::before { width: 10px; height: 10px; border-radius: 999px; top: 7px; left: 50%; transform: translateX(-50%); background: #c4b5fd; }
+.account-title-icon.profile::after { width: 18px; height: 12px; border-radius: 10px 10px 5px 5px; left: 50%; bottom: 6px; transform: translateX(-50%); background: #8b5cf6; }
+.account-title-icon.friends::before,
+.account-title-icon.friends span::before { width: 8px; height: 8px; border-radius: 999px; top: 8px; background: #c4b5fd; }
+.account-title-icon.friends::before { left: 8px; }
+.account-title-icon.friends span::before { right: 8px; }
+.account-title-icon.friends::after,
+.account-title-icon.friends span::after { width: 13px; height: 10px; border-radius: 9px 9px 5px 5px; bottom: 7px; background: #8b5cf6; }
+.account-title-icon.friends::after { left: 6px; }
+.account-title-icon.friends span::after { right: 6px; }
+.account-profile-tools { position: relative; display: flex; justify-content: center; gap: 8px; margin: 12px 0; }
+.account-tool-btn,
+.friends-icon-btn,
+.friends-action-btn {
+    position: relative;
+    min-height: 40px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.30);
+    background: rgba(148, 163, 184, 0.10);
+    color: var(--text);
+    font-weight: 950;
+    padding: 0 13px;
+}
+.account-tool-btn { width: 46px; height: 42px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.account-tool-btn.friend .account-title-icon { width: 28px; height: 28px; border: 0; background: transparent; }
+.account-settings-menu,
+.friends-cleanup-menu { display: none !important; z-index: 100; }
+.account-settings-menu.active,
+.friends-cleanup-menu.active { display: flex !important; }
+.account-settings-menu { left: 50%; right: auto !important; top: calc(100% + 8px) !important; transform: translateX(-50%); min-width: 190px; }
+.account-mini-toggle,
+.cloud-auto-toggle {
+    min-height: 39px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 11px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 950;
+    text-align: left;
+}
+.account-mini-toggle input,
+.cloud-auto-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.account-mini-toggle b,
+.cloud-auto-toggle b {
+    width: 46px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(15, 23, 42, 0.62);
+    position: relative;
+}
+.account-mini-toggle b::after,
+.cloud-auto-toggle b::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 2px;
+    border-radius: 999px;
+    background: #94a3b8;
+    transition: transform 0.18s ease, background 0.18s ease;
+}
+.account-mini-toggle input:checked + b,
+.cloud-auto-toggle input:checked + b { background: rgba(139, 92, 246, 0.38); border-color: rgba(139, 92, 246, 0.72); }
+.account-mini-toggle input:checked + b::after,
+.cloud-auto-toggle input:checked + b::after { transform: translateX(21px); background: #ffffff; }
+.cloud-auto-toggle { grid-template-columns: minmax(0, 1fr) 48px; margin-bottom: 4px; }
+.account-page-modal.local-mode .account-avatar-preview,
+.account-page-modal.local-mode .account-nickname-label,
+.account-page-modal.local-mode .account-profile-tools,
+.account-page-modal.local-mode #account-logout-btn,
+.account-page-modal.local-mode .account-title-icon { display: none !important; }
+
+.friends-topline { min-height: 38px; display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-bottom: 10px; }
+.friends-count-label { color: #ffffff; font-size: 14px; font-weight: 950; }
+.friends-status { min-height: 18px; color: #dbeafe; font-size: 11px; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.2s ease; }
+.friends-status.active { opacity: 1; }
+.friends-status.error { color: #fecaca; }
+.friends-top-actions { position: relative; display: flex; justify-content: flex-end; gap: 7px; }
+.friends-icon-btn { width: 38px; height: 38px; min-height: 38px; padding: 0; font-size: 22px; line-height: 1; }
+.friends-icon-btn.danger { color: #fecaca; background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.34); }
+.friends-action-row { display: grid; grid-template-columns: 1fr 1fr 48px; gap: 8px; margin-bottom: 12px; }
+.friends-action-btn { height: 42px; text-transform: uppercase; font-size: 11px; }
+.friends-action-btn.icon { font-size: 24px; padding: 0; }
+.friends-cleanup-menu { right: 0 !important; top: calc(100% + 8px) !important; min-width: 190px; }
+.friends-main-section.collapsed { padding-bottom: 12px; }
+.friends-list.collapsed {
+    grid-template-columns: repeat(4, 52px);
+    justify-content: center;
+    gap: 9px;
+}
+.friend-avatar-only {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    padding: 2px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(255,255,255,0.05);
+}
+.friend-avatar-only .friend-avatar { width: 100%; height: 100%; border-radius: 14px; }
+.friend-avatar-only.delete-mode { border-color: rgba(239, 68, 68, 0.7); background: rgba(239, 68, 68, 0.16); }
+.friend-row .danger { color: #fecaca; border-color: rgba(239, 68, 68, 0.42); background: rgba(239, 68, 68, 0.14); }
+.friend-send-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.friend-send-all-btn { width: 100%; margin-bottom: 10px; }
+.friend-tool-modal { width: min(560px, calc(100vw - 24px)) !important; text-align: left !important; }
+.friend-tool-modal h3 { text-align: center; }
+@media (max-width: 640px) {
+    .friends-topline { grid-template-columns: 58px minmax(0, 1fr) auto; }
+    .friends-list.collapsed { grid-template-columns: repeat(4, 48px); gap: 7px; }
+    .friend-avatar-only { width: 48px; height: 48px; border-radius: 14px; }
+}

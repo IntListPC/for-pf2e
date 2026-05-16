@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.4.2">
+    <link rel="stylesheet" href="css/styles.css?v=1.5">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -67,18 +67,17 @@
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
         <div id="workshop-battle-view" class="workshop-battle-view"></div>
-        <div class="app-version-mark">IntListPC v1.4.2<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.5<br>by RubiDus</div>
     </div>
 </div>
 
 <div id="accountModal" class="modal"><div class="modal-content account-modal account-page-modal">
     <div class="account-page-head">
-        <h3>Профиль</h3>
-        <button type="button" onclick="closeModal('accountModal')" class="account-page-close" title="Закрыть" aria-label="Закрыть">×</button>
-    </div>
-    <div class="account-tabs">
-        <button type="button" id="account-tab-profile" class="account-tab active" onclick="switchAccountTab('profile')">Профиль</button>
-        <button type="button" id="account-tab-friends" class="account-tab" onclick="switchAccountTab('friends')">Друзья</button>
+        <div class="account-title-wrap">
+            <span id="account-title-icon" class="account-title-icon profile" aria-hidden="true"><span></span></span>
+            <h3 id="account-modal-title">Профиль</h3>
+        </div>
+        <button type="button" id="account-page-close" onclick="handleAccountCloseButton()" class="account-page-close" title="Закрыть" aria-label="Закрыть">×</button>
     </div>
 
     <div id="account-profile-panel" class="account-panel active">
@@ -87,14 +86,17 @@
             <div id="account-nickname-label" class="account-nickname-label">Лакал. Режим</div>
             <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
 
-            <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
-                <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
-                <span><b>Автосинхронизация</b></span>
-            </label>
-            <label id="account-workshop-wrap" class="account-sync-toggle account-workshop-toggle" for="account-workshop-toggle">
-                <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
-                <span><b>Мастерская</b></span>
-            </label>
+            <div id="account-profile-tools" class="account-profile-tools">
+                <button type="button" class="account-tool-btn" onclick="toggleAccountSettingsMenu(event)" title="Настройки" aria-label="Настройки">⚙</button>
+                <button type="button" id="account-friends-btn" class="account-tool-btn friend" onclick="switchAccountTab('friends')" title="Друзья" aria-label="Друзья"><span class="account-title-icon friends" aria-hidden="true"><span></span></span><i class="account-notification-dot"></i></button>
+                <div id="account-settings-menu" class="character-context-menu account-settings-menu" onclick="event.stopPropagation()">
+                    <label class="account-mini-toggle" for="account-workshop-toggle">
+                        <span>Мастерская</span>
+                        <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
+                        <b></b>
+                    </label>
+                </div>
+            </div>
 
             <div id="account-menu-actions" class="account-menu-actions">
                 <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
@@ -121,26 +123,53 @@
     <div id="account-friends-panel" class="account-panel">
         <div id="friends-login-note" class="friends-empty">Войди в профиль, чтобы искать друзей и получать отправления.</div>
         <div id="friends-content" class="friends-content">
-            <div class="friends-search-row">
-                <input type="text" id="friend-search-input" maxlength="32" autocomplete="off" placeholder="Ник друга">
-                <button type="button" onclick="searchFriendByNickname()" class="btn-primary">НАЙТИ</button>
+            <div class="friends-topline">
+                <div id="friends-count-label" class="friends-count-label">0/16</div>
+                <div id="friends-status" class="friends-status"></div>
+                <div class="friends-top-actions">
+                    <button type="button" id="friends-collapse-btn" class="friends-icon-btn" onclick="toggleFriendsListCollapsed()" title="Список друзей" aria-label="Список друзей">⌄</button>
+                    <button type="button" class="friends-icon-btn danger" onclick="toggleFriendsCleanupMenu(event)" title="Очистка" aria-label="Очистка">×</button>
+                    <div id="friends-cleanup-menu" class="character-context-menu friends-cleanup-menu" onclick="event.stopPropagation()">
+                        <button type="button" onclick="clearFriendRequests()">Удалить заявки</button>
+                        <button type="button" onclick="clearFriendInbox()">Удалить отправления</button>
+                        <button type="button" onclick="toggleFriendDeleteMode()" class="danger">Удалить из друзей</button>
+                    </div>
+                </div>
             </div>
-            <div id="friend-search-result" class="friends-section"></div>
-            <div class="friends-section">
-                <div class="friends-section-title">Заявки</div>
-                <div id="friend-requests-list" class="friends-list"></div>
+            <div class="friends-action-row">
+                <button type="button" class="friends-action-btn" onclick="openFriendSearchModal()">Найти<i class="account-notification-dot"></i></button>
+                <button type="button" id="friend-requests-btn" class="friends-action-btn" onclick="openFriendRequestsModal()">Заявки<i class="account-notification-dot"></i></button>
+                <button type="button" id="friend-inbox-btn" class="friends-action-btn icon" onclick="openFriendInboxModal()" title="Отправления" aria-label="Отправления">↓<i class="account-notification-dot"></i></button>
             </div>
-            <div class="friends-section">
+            <div id="friends-main-section" class="friends-section friends-main-section">
                 <div class="friends-section-title">Друзья</div>
                 <div id="friends-list" class="friends-list"></div>
-            </div>
-            <div class="friends-section">
-                <div class="friends-section-title">Отправления</div>
-                <div id="friend-inbox-list" class="friends-list"></div>
             </div>
             <div id="friend-character-send-panel" class="friend-send-panel"></div>
         </div>
     </div>
+</div></div>
+
+<div id="friendSearchModal" class="modal"><div class="modal-content cloud-confirm-modal friend-tool-modal">
+    <h3>Найти друга</h3>
+    <div class="friends-search-row">
+        <input type="text" id="friend-search-input" maxlength="32" autocomplete="off" placeholder="Ник друга">
+        <button type="button" onclick="searchFriendByNickname()" class="btn-primary">НАЙТИ</button>
+    </div>
+    <div id="friend-search-result" class="friends-section"></div>
+    <button type="button" onclick="closeModal('friendSearchModal')" class="btn-sec">ЗАКРЫТЬ</button>
+</div></div>
+
+<div id="friendRequestsModal" class="modal"><div class="modal-content cloud-confirm-modal friend-tool-modal">
+    <h3>Заявки</h3>
+    <div id="friend-requests-list" class="friends-list"></div>
+    <button type="button" onclick="closeModal('friendRequestsModal')" class="btn-sec">ЗАКРЫТЬ</button>
+</div></div>
+
+<div id="friendInboxModal" class="modal"><div class="modal-content cloud-confirm-modal friend-tool-modal">
+    <h3>Отправления</h3>
+    <div id="friend-inbox-list" class="friends-list"></div>
+    <button type="button" onclick="closeModal('friendInboxModal')" class="btn-sec">ЗАКРЫТЬ</button>
 </div></div>
 
 <div id="cloudConfirmModal" class="modal"><div class="modal-content cloud-confirm-modal">
@@ -1201,7 +1230,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.4.2"></script>
+<script src="js/app.js?v=1.5"></script>
 
 <div class="footer-spacer"></div>
 </body>

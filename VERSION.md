@@ -2,6 +2,8 @@
 
 Current version: `1.4.1`
 
+`1.4.2` - Profile modal rebuilt as a profile page with a Friends tab; cloud profile snapshots now carry friends, friend requests, and incoming character sends.
+
 `1.4.1` - Version label updated; on page refresh or a new visit, logged-in accounts now compare the cloud snapshot with the current local profile and offer to load cloud data only when they differ.
 
 `1.04` - Version label and cache-busting updated for the temporary HP release; attack critical damage now reads the live crit state and falls back to a doubled normal damage formula when no explicit crit formula is set; attacks and equipment weapons can optionally add Strength or a custom flat bonus to damage; the bestiary sheet hides the XP bar and the extra damage controls are kept on one row; account login now auto-loads cloud data, logout asks whether to save, and cloud autosave is debounced, change-aware, non-blocking, and shown only by the cloud upload animation.

@@ -16,6 +16,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const MAX_WORKSHOP_CHARACTERS = 50;
     const YANDEX_CLOUD_API_URL = 'https://d5dig5ghq4dmdg411jnc.kr8f6hld.apigw.yandexcloud.net';
     const ACCOUNT_PROFILE_KEY = 'intlistpc_account_profile_v1';
+    const ACCOUNT_SOCIAL_KEY = 'intlistpc_account_social_v1';
     const ACCOUNT_NICKNAME_MAX_LENGTH = 13;
     const CLOUD_REQUEST_TIMEOUT_MS = 12000;
     const LOCAL_SHEET_UPDATED_AT_KEY = '_localUpdatedAt';
@@ -58,6 +59,8 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     let accountStatusState = { message: '', loading: false, error: false, fading: false };
     let accountStatusFadeTimer = null;
     let accountStatusClearTimer = null;
+    let accountCurrentTab = 'profile';
+    let selectedFriendForSendKey = '';
 
     let currentPage = 0;
     const totalPages = 6;
@@ -6981,6 +6984,7 @@ ${getCleanFeatType(slot.type)}`;
     function writeAccountProfile(profile) {
         if (!profile) {
             safeStorageRemove(ACCOUNT_PROFILE_KEY);
+            safeStorageRemove(ACCOUNT_SOCIAL_KEY);
             return;
         }
         safeStorageSet(ACCOUNT_PROFILE_KEY, JSON.stringify({
@@ -6989,6 +6993,332 @@ ${getCleanFeatType(slot.type)}`;
             avatar: profile.avatar || '',
             autoSync: !!profile.autoSync
         }), false);
+    }
+
+    function normalizeAccountSocial(data = {}) {
+        const normalizePerson = item => {
+            const nickname = normalizeAccountNickname(item?.nickname || item?.fromNickname || '');
+            const key = accountStorageKey(item?.key || item?.fromKey || nickname);
+            if (!key || !nickname) return null;
+            return {
+                key,
+                nickname,
+                avatar: item?.avatar || '',
+                createdAt: item?.createdAt || new Date().toISOString()
+            };
+        };
+        const uniquePeople = list => {
+            const map = new Map();
+            (Array.isArray(list) ? list : []).forEach(item => {
+                const clean = normalizePerson(item);
+                if (clean) map.set(clean.key, clean);
+            });
+            return Array.from(map.values());
+        };
+        const inbox = (Array.isArray(data.characterInbox) ? data.characterInbox : []).map(item => ({
+            id: String(item?.id || makeCharacterId()),
+            fromKey: accountStorageKey(item?.fromKey || item?.fromNickname || ''),
+            fromNickname: normalizeAccountNickname(item?.fromNickname || ''),
+            fromAvatar: item?.fromAvatar || '',
+            character: item?.character || null,
+            createdAt: item?.createdAt || new Date().toISOString()
+        })).filter(item => item.fromKey && item.fromNickname && item.character);
+        return {
+            friends: uniquePeople(data.friends),
+            friendRequests: uniquePeople(data.friendRequests),
+            characterInbox: inbox
+        };
+    }
+
+    function readAccountSocial() {
+        try {
+            return normalizeAccountSocial(JSON.parse(localStorage.getItem(ACCOUNT_SOCIAL_KEY) || '{}'));
+        } catch (e) {
+            console.warn('Account social read error', e);
+            return normalizeAccountSocial();
+        }
+    }
+
+    function writeAccountSocial(social) {
+        safeStorageSet(ACCOUNT_SOCIAL_KEY, JSON.stringify(normalizeAccountSocial(social)), false);
+    }
+
+    function getCurrentAccountSocial() {
+        return readAccountSocial();
+    }
+
+    function setCurrentAccountSocial(social) {
+        writeAccountSocial(social);
+        renderFriendsPanel();
+    }
+
+    function syncLocalSocialFromCloudSnapshot(snapshot) {
+        writeAccountSocial(snapshot?.social || {});
+    }
+
+    function getCurrentAccountKey() {
+        cloudUser = cloudUser || readAccountProfile();
+        return accountStorageKey(cloudUser?.nickname || '');
+    }
+
+    function friendAvatarHtml(avatar = '') {
+        const src = avatar || getDefaultProfileIcon();
+        return `<span class="friend-avatar"><img src="${escapeHtml(src)}" alt=""></span>`;
+    }
+
+    function jsAttr(str) {
+        return escapeHtml(jsEscape(str));
+    }
+
+    function personRowHtml(person, subtitle, actions = '', clickable = false) {
+        const click = clickable ? ` onclick="openFriendSendPanel('${jsAttr(person.key)}')"` : '';
+        return `<div class="friend-row ${clickable ? 'clickable' : ''}"${click}>${friendAvatarHtml(person.avatar)}<div><div class="friend-title">${escapeHtml(person.nickname)}</div><div class="friend-subtitle">${escapeHtml(subtitle || '')}</div></div><div class="friend-actions">${actions}</div></div>`;
+    }
+
+    function switchAccountTab(tab = 'profile') {
+        accountCurrentTab = tab === 'friends' ? 'friends' : 'profile';
+        document.getElementById('account-tab-profile')?.classList.toggle('active', accountCurrentTab === 'profile');
+        document.getElementById('account-tab-friends')?.classList.toggle('active', accountCurrentTab === 'friends');
+        document.getElementById('account-profile-panel')?.classList.toggle('active', accountCurrentTab === 'profile');
+        document.getElementById('account-friends-panel')?.classList.toggle('active', accountCurrentTab === 'friends');
+        if (accountCurrentTab === 'friends') renderFriendsPanel();
+    }
+
+    function renderFriendsPanel(message = '') {
+        const profile = cloudUser || readAccountProfile();
+        const loginNote = document.getElementById('friends-login-note');
+        const content = document.getElementById('friends-content');
+        const result = document.getElementById('friend-search-result');
+        const requestsEl = document.getElementById('friend-requests-list');
+        const friendsEl = document.getElementById('friends-list');
+        const inboxEl = document.getElementById('friend-inbox-list');
+        const sendPanel = document.getElementById('friend-character-send-panel');
+        const loggedIn = !!profile;
+        if (loginNote) loginNote.style.display = loggedIn ? 'none' : '';
+        if (content) content.classList.toggle('active', loggedIn);
+        if (!loggedIn) return;
+        const social = getCurrentAccountSocial();
+        if (message && result) result.innerHTML = `<div class="friends-empty">${escapeHtml(message)}</div>`;
+        if (requestsEl) {
+            requestsEl.innerHTML = social.friendRequests.length
+                ? social.friendRequests.map(req => personRowHtml(req, 'Хочет добавить тебя в друзья', `<button type="button" class="btn-primary" onclick="acceptFriendRequest('${jsAttr(req.key)}')">Принять</button><button type="button" class="btn-sec" onclick="declineFriendRequest('${jsAttr(req.key)}')">Отказать</button>`)).join('')
+                : '<div class="friends-empty">Заявок нет.</div>';
+        }
+        if (friendsEl) {
+            friendsEl.innerHTML = social.friends.length
+                ? social.friends.map(friend => personRowHtml(friend, 'Нажми, чтобы отправить персонажа', '', true)).join('')
+                : '<div class="friends-empty">Список друзей пуст.</div>';
+        }
+        if (inboxEl) {
+            inboxEl.innerHTML = social.characterInbox.length
+                ? social.characterInbox.map(item => {
+                    const name = item.character?.name || item.character?.sheet?.['in-name'] || 'Персонаж';
+                    const person = { key: item.fromKey, nickname: item.fromNickname, avatar: item.fromAvatar };
+                    return personRowHtml(person, `Отправление: ${name}`, `<button type="button" class="btn-primary" onclick="acceptFriendCharacter('${jsAttr(item.id)}')">Принять</button><button type="button" class="btn-sec" onclick="declineFriendCharacter('${jsAttr(item.id)}')">Отклонить</button>`);
+                }).join('')
+                : '<div class="friends-empty">Отправлений нет.</div>';
+        }
+        if (sendPanel && !selectedFriendForSendKey) {
+            sendPanel.classList.remove('active');
+            sendPanel.innerHTML = '';
+        }
+    }
+
+    async function fetchCloudProfileByKey(nicknameKey, action = 'Профиль') {
+        return cloudApiRequest('GET', nicknameKey, null, action);
+    }
+
+    async function saveCloudProfileRow(nicknameKey, row, action = 'Профиль') {
+        const payload = {
+            nickname_key: nicknameKey,
+            nickname: row?.nickname || nicknameKey,
+            profile_avatar: row?.profile_avatar || row?.data?.profileAvatar || '',
+            data: row?.data || {},
+            updated_at: new Date().toISOString()
+        };
+        return cloudApiRequest('POST', nicknameKey, payload, action);
+    }
+
+    async function searchFriendByNickname() {
+        if (!requireNicknameAccount()) return;
+        const input = document.getElementById('friend-search-input');
+        const result = document.getElementById('friend-search-result');
+        const nickname = normalizeAccountNickname(input?.value || '');
+        if (!nickname) {
+            if (result) result.innerHTML = '<div class="friends-empty">Введи ник друга.</div>';
+            return;
+        }
+        const key = accountStorageKey(nickname);
+        if (key === getCurrentAccountKey()) {
+            if (result) result.innerHTML = '<div class="friends-empty">Это твой профиль.</div>';
+            return;
+        }
+        if (result) result.innerHTML = '<div class="friends-empty">Ищу профиль...</div>';
+        const { data: row, error } = await fetchCloudProfileByKey(key, 'Поиск друга');
+        if (error || !row) {
+            if (result) result.innerHTML = '<div class="friends-empty">Профиль не найден.</div>';
+            return;
+        }
+        const displayName = normalizeAccountNickname(row.nickname || nickname);
+        const avatar = row.profile_avatar || row.data?.profileAvatar || '';
+        const social = getCurrentAccountSocial();
+        const alreadyFriend = social.friends.some(friend => friend.key === key);
+        const requested = (row.data?.social?.friendRequests || []).some(req => accountStorageKey(req?.key || req?.fromKey || req?.nickname) === getCurrentAccountKey());
+        const action = alreadyFriend
+            ? '<button type="button" class="btn-sec" disabled>Уже друг</button>'
+            : (requested ? '<button type="button" class="btn-sec" disabled>Заявка отправлена</button>' : `<button type="button" class="btn-primary" onclick="sendFriendRequest('${jsAttr(key)}')">Добавить в друзья</button>`);
+        if (result) result.innerHTML = personRowHtml({ key, nickname: displayName, avatar }, 'Найден профиль', action);
+    }
+
+    async function sendFriendRequest(targetKey) {
+        if (!requireNicknameAccount()) return;
+        const ownKey = getCurrentAccountKey();
+        const { data: row, error } = await fetchCloudProfileByKey(targetKey, 'Заявка в друзья');
+        if (error || !row) {
+            renderFriendsPanel('Профиль больше не найден.');
+            return;
+        }
+        const targetSocial = normalizeAccountSocial(row.data?.social || {});
+        if (!targetSocial.friendRequests.some(req => req.key === ownKey)) {
+            targetSocial.friendRequests.push({
+                key: ownKey,
+                nickname: cloudUser.nickname,
+                avatar: cloudUser.avatar || '',
+                createdAt: new Date().toISOString()
+            });
+        }
+        row.data = { ...(row.data || {}), social: targetSocial };
+        const saved = await saveCloudProfileRow(targetKey, row, 'Заявка в друзья');
+        renderFriendsPanel(saved.error ? `Не удалось отправить заявку: ${formatCloudError(saved.error)}` : 'Заявка отправлена.');
+    }
+
+    async function acceptFriendRequest(friendKey) {
+        if (!requireNicknameAccount()) return;
+        const social = getCurrentAccountSocial();
+        const request = social.friendRequests.find(req => req.key === friendKey);
+        if (!request) return;
+        social.friendRequests = social.friendRequests.filter(req => req.key !== friendKey);
+        if (!social.friends.some(friend => friend.key === friendKey)) social.friends.push(request);
+        setCurrentAccountSocial(social);
+        await saveAccountToCloud({ auto: true, socialOnly: true });
+
+        const { data: row } = await fetchCloudProfileByKey(friendKey, 'Принятие заявки');
+        if (row) {
+            const otherSocial = normalizeAccountSocial(row.data?.social || {});
+            const ownKey = getCurrentAccountKey();
+            if (!otherSocial.friends.some(friend => friend.key === ownKey)) {
+                otherSocial.friends.push({ key: ownKey, nickname: cloudUser.nickname, avatar: cloudUser.avatar || '', createdAt: new Date().toISOString() });
+            }
+            otherSocial.friendRequests = otherSocial.friendRequests.filter(req => req.key !== ownKey);
+            row.data = { ...(row.data || {}), social: otherSocial };
+            await saveCloudProfileRow(friendKey, row, 'Принятие заявки');
+        }
+        renderFriendsPanel('Заявка принята.');
+    }
+
+    async function declineFriendRequest(friendKey) {
+        const social = getCurrentAccountSocial();
+        social.friendRequests = social.friendRequests.filter(req => req.key !== friendKey);
+        setCurrentAccountSocial(social);
+        await saveAccountToCloud({ auto: true, socialOnly: true });
+        renderFriendsPanel('Заявка отклонена.');
+    }
+
+    function buildCharacterExportItemFromScope(id, scope = CHARACTER_SCOPE_MAIN, index = 0) {
+        const sheet = normalizeLoadedSheet(readCharacterSheet(id, scope) || createBlankSheetData(`Персонаж ${index + 1}`));
+        const avatar = localStorage.getItem(characterAvatarKey(id, scope)) || '';
+        const list = readCharacters(scope);
+        const ch = list.find(x => String(x.id) === String(id)) || { id, ...getCharacterMetaFromSheet(sheet, scope) };
+        return { id: String(id || makeCharacterId()), name: ch.name || sheet?.['in-name'] || 'Герой', meta: ch.meta || getCharacterMetaFromSheet(sheet, scope).meta, sheet, avatar };
+    }
+
+    function openFriendSendPanel(friendKey) {
+        selectedFriendForSendKey = friendKey;
+        const panel = document.getElementById('friend-character-send-panel');
+        const friend = getCurrentAccountSocial().friends.find(item => item.key === friendKey);
+        if (!panel || !friend) return;
+        const list = readCharacters(CHARACTER_SCOPE_MAIN);
+        panel.classList.add('active');
+        panel.innerHTML = `<div class="friends-section-title">Отправить персонажа: ${escapeHtml(friend.nickname)}</div>${
+            list.length ? `<div class="friend-send-grid">${list.map((ch, index) => {
+                const item = buildCharacterExportItemFromScope(ch.id, CHARACTER_SCOPE_MAIN, index);
+                return `<div class="friend-character-choice">${friendAvatarHtml(item.avatar)}<div class="friend-title">${escapeHtml(item.name)}</div><button type="button" class="btn-primary" onclick="sendCharacterToFriend('${jsAttr(friendKey)}','${jsAttr(String(ch.id))}')">Отправить</button></div>`;
+            }).join('')}</div>` : '<div class="friends-empty">В списке персонажей пока никого нет.</div>'
+        }`;
+    }
+
+    async function sendCharacterToFriend(friendKey, characterId) {
+        if (!requireNicknameAccount()) return;
+        if (activeCharacterId && String(activeCharacterId) === String(characterId) && !isWorkshopScope()) saveAll(false);
+        const item = buildCharacterExportItemFromScope(characterId, CHARACTER_SCOPE_MAIN);
+        const { data: row, error } = await fetchCloudProfileByKey(friendKey, 'Отправка персонажа');
+        if (error || !row) {
+            renderFriendsPanel('Друг не найден в облаке.');
+            return;
+        }
+        const targetSocial = normalizeAccountSocial(row.data?.social || {});
+        targetSocial.characterInbox.push({
+            id: makeCharacterId(),
+            fromKey: getCurrentAccountKey(),
+            fromNickname: cloudUser.nickname,
+            fromAvatar: cloudUser.avatar || '',
+            character: item,
+            createdAt: new Date().toISOString()
+        });
+        row.data = { ...(row.data || {}), social: targetSocial };
+        const saved = await saveCloudProfileRow(friendKey, row, 'Отправка персонажа');
+        renderFriendsPanel(saved.error ? `Не удалось отправить персонажа: ${formatCloudError(saved.error)}` : 'Персонаж отправлен.');
+    }
+
+    function importFriendCharactersToMain(items) {
+        const cleanItems = (items || []).filter(item => item?.sheet);
+        if (!cleanItems.length) throw new Error('empty import');
+        const mainCharacters = readCharacters(CHARACTER_SCOPE_MAIN);
+        if (mainCharacters.length + cleanItems.length > MAX_CHARACTERS) {
+            throw new Error(`В списке персонажей не хватает места: лимит ${MAX_CHARACTERS}.`);
+        }
+        if (!isWorkshopScope() && activeCharacterId) saveAll(false);
+        const added = cleanItems.map((item) => {
+            const id = makeCharacterId();
+            const sheet = normalizeLoadedSheet(item.sheet || createBlankSheetData('Новый герой'));
+            const avatar = item.avatar || '';
+            writeCharacterSheet(id, sheet, CHARACTER_SCOPE_MAIN);
+            if (avatar) safeStorageSet(characterAvatarKey(id, CHARACTER_SCOPE_MAIN), avatar, false);
+            else safeStorageRemove(characterAvatarKey(id, CHARACTER_SCOPE_MAIN));
+            return { id, ...getCharacterMetaFromSheet(sheet, CHARACTER_SCOPE_MAIN), updatedAt: Date.now() };
+        });
+        const next = mainCharacters.concat(added);
+        writeCharacters(CHARACTER_SCOPE_MAIN, next);
+        if (!isWorkshopScope()) {
+            characters = next;
+            if (!activeCharacterId) activeCharacterId = added[0]?.id || null;
+        }
+        renderCharacterMenu();
+        scheduleCloudSave();
+    }
+
+    async function acceptFriendCharacter(inboxId) {
+        const social = getCurrentAccountSocial();
+        const item = social.characterInbox.find(entry => entry.id === inboxId);
+        if (!item) return;
+        try {
+            importFriendCharactersToMain([item.character]);
+        } catch (error) {
+            renderFriendsPanel(error.message || 'Не удалось принять персонажа.');
+            return;
+        }
+        social.characterInbox = social.characterInbox.filter(entry => entry.id !== inboxId);
+        setCurrentAccountSocial(social);
+        await saveAccountToCloud({ auto: true, socialOnly: true });
+        renderFriendsPanel('Персонаж добавлен в список персонажей.');
+    }
+
+    async function declineFriendCharacter(inboxId) {
+        const social = getCurrentAccountSocial();
+        social.characterInbox = social.characterInbox.filter(entry => entry.id !== inboxId);
+        setCurrentAccountSocial(social);
+        await saveAccountToCloud({ auto: true, socialOnly: true });
+        renderFriendsPanel('Отправление отклонено.');
     }
 
     function getDefaultProfileIcon() {
@@ -7090,6 +7420,7 @@ ${getCleanFeatType(slot.type)}`;
             const el = document.getElementById(`account-${name}-view`);
             if (el) el.classList.toggle('active', name === view);
         });
+        switchAccountTab('profile');
         const targetId = view === 'create' ? 'account-create-nickname-input' : (view === 'login' ? 'account-nickname-input' : '');
         if (targetId) setTimeout(() => document.getElementById(targetId)?.focus(), 50);
     }
@@ -7136,6 +7467,7 @@ ${getCleanFeatType(slot.type)}`;
         if (menuActions) menuActions.style.display = loggedIn ? 'none' : '';
         if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
         updateAccountSummary(message);
+        if (accountCurrentTab === 'friends') renderFriendsPanel();
         syncCharacterMenuModeUI();
     }
 
@@ -7144,6 +7476,7 @@ ${getCleanFeatType(slot.type)}`;
         updateAccountUI();
         setAccountView('menu');
         openModal('accountModal');
+        renderFriendsPanel();
     }
 
     async function checkCloudAccountExists(nickname, action = 'Проверка аккаунта') {
@@ -7183,6 +7516,7 @@ ${getCleanFeatType(slot.type)}`;
             autoSync: false
         };
         writeAccountProfile(cloudUser);
+        writeAccountSocial({});
         if (input) input.value = '';
         showAccountMenuView();
         const saved = await saveAccountToCloud({ accountCreated: true });
@@ -7223,6 +7557,7 @@ ${getCleanFeatType(slot.type)}`;
             autoSync: sameAccount ? !!oldProfile?.autoSync : true
         };
         writeAccountProfile(cloudUser);
+        syncLocalSocialFromCloudSnapshot(row.data || {});
         if (input) input.value = '';
         showAccountMenuView();
         closeModal('accountModal');
@@ -7487,6 +7822,7 @@ ${getCleanFeatType(slot.type)}`;
             return;
         }
         const avatar = row?.profile_avatar || row?.data?.profileAvatar || '';
+        if (row?.data?.social) syncLocalSocialFromCloudSnapshot(row.data);
         if (avatar) {
             cloudUser.avatar = avatar;
             writeAccountProfile(cloudUser);
@@ -7520,6 +7856,7 @@ ${getCleanFeatType(slot.type)}`;
             nickname: cloudUser.nickname,
             profileAvatar: cloudUser.avatar || '',
             savedAt: new Date().toISOString(),
+            social: getCurrentAccountSocial(),
             characters: snapshotCharacters
         };
     }
@@ -7754,6 +8091,7 @@ ${getCleanFeatType(slot.type)}`;
                 cloudUser.avatar = snapshot.profileAvatar;
                 writeAccountProfile(cloudUser);
             }
+            syncLocalSocialFromCloudSnapshot(snapshot);
             writeCharacters(CHARACTER_SCOPE_MAIN, incomingCharacters);
             safeStorageSet(ACTIVE_CHARACTER_KEY, incomingCharacters[0]?.id || '', false);
             if (!isWorkshopScope()) {
@@ -8779,6 +9117,7 @@ ${getCleanFeatType(slot.type)}`;
 
     Object.assign(window, {
         openAccountProfile,
+        switchAccountTab,
         showAccountMenuView,
         openAccountCreateForm,
         openAccountLoginForm,
@@ -8846,6 +9185,14 @@ ${getCleanFeatType(slot.type)}`;
         confirmCloudChoice,
         syncAttackDamageBonusControls,
         syncEquipmentDamageBonusControls,
+        searchFriendByNickname,
+        sendFriendRequest,
+        acceptFriendRequest,
+        declineFriendRequest,
+        openFriendSendPanel,
+        sendCharacterToFriend,
+        acceptFriendCharacter,
+        declineFriendCharacter,
         openModal,
         closeModal
     });

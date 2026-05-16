@@ -2442,3 +2442,53 @@ body.battle-sheet-embed .feat-card {
         transform: none;
     }
 }
+
+/* Profile page and friends */
+.account-page-modal {
+    width: min(760px, calc(100vw - 28px)) !important;
+    max-height: min(86vh, 820px);
+    overflow: hidden;
+    padding: 18px !important;
+    text-align: left !important;
+    display: flex;
+    flex-direction: column;
+}
+.account-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.account-page-head h3 { margin: 0 !important; font-size: 25px; line-height: 1; }
+.account-page-close { width: 42px; height: 42px; min-width: 42px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.32); background: rgba(148, 163, 184, 0.10); color: var(--text); font-size: 26px; font-weight: 900; line-height: 1; padding: 0; }
+.account-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.account-tab { min-height: 44px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.30); background: rgba(15, 23, 42, 0.44); color: var(--text-dim); font-size: 12px; font-weight: 950; text-transform: uppercase; }
+.account-tab.active { color: #ffffff; background: rgba(139, 92, 246, 0.20); border-color: rgba(139, 92, 246, 0.72); box-shadow: 0 0 16px rgba(139, 92, 246, 0.16); }
+.account-panel { display: none; min-height: 0; overflow: auto; padding: 2px; }
+.account-panel.active { display: block; }
+.account-panel #account-menu-view { text-align: center; }
+.friends-content { display: none; }
+.friends-content.active { display: block; }
+.friends-search-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; margin-bottom: 12px; }
+.friends-search-row input { margin: 0; }
+.friends-section { border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(15, 23, 42, 0.32); border-radius: 18px; padding: 12px; margin-top: 12px; }
+.friends-section:empty { display: none; }
+.friends-section-title { color: #c7d2fe; font-size: 12px; font-weight: 950; text-transform: uppercase; margin-bottom: 9px; }
+.friends-list { display: grid; gap: 8px; }
+.friend-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(255,255,255,0.045); border-radius: 15px; padding: 9px; }
+.friend-row.clickable { cursor: pointer; }
+.friend-row.clickable:hover { border-color: rgba(139, 92, 246, 0.56); background: rgba(139, 92, 246, 0.12); }
+.friend-avatar { width: 52px; height: 52px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.28); background: var(--input-bg); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.friend-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.friend-title { min-width: 0; color: #ffffff; font-size: 15px; font-weight: 950; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-subtitle { margin-top: 3px; color: var(--text-dim); font-size: 11px; font-weight: 800; }
+.friend-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+.friend-actions button, .friend-send-panel button { min-height: 36px; border-radius: 12px; padding: 0 10px; font-size: 11px; }
+.friends-empty { border: 1px dashed rgba(148, 163, 184, 0.30); border-radius: 16px; padding: 16px 12px; color: var(--text-dim); text-align: center; font-size: 13px; font-weight: 850; }
+.friend-send-panel { display: none; border: 1px solid rgba(139, 92, 246, 0.42); background: rgba(139, 92, 246, 0.10); border-radius: 18px; padding: 12px; margin-top: 12px; }
+.friend-send-panel.active { display: block; }
+.friend-send-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.friend-character-choice { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(15, 23, 42, 0.35); border-radius: 14px; padding: 8px; }
+.friend-character-choice .friend-avatar { width: 42px; height: 42px; border-radius: 12px; }
+@media (max-width: 640px) {
+    .account-page-modal { width: calc(100vw - 16px) !important; max-height: 90vh; padding: 14px !important; border-radius: 18px !important; }
+    .friends-search-row, .friend-send-grid { grid-template-columns: 1fr; }
+    .friend-row { grid-template-columns: 48px minmax(0, 1fr); }
+    .friend-actions { grid-column: 1 / -1; justify-content: stretch; }
+    .friend-actions button { flex: 1 1 0; }
+}

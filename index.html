@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.4.1">
+    <link rel="stylesheet" href="css/styles.css?v=1.4.2">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -38,7 +38,7 @@
             <div class="account-header-card" onclick="openAccountProfile()">
                 <button type="button" class="site-icon-mark" title="Профиль" aria-label="Профиль"><img id="profile-icon-img" src="assets/icons/favicon.png" alt=""></button>
                 <div class="account-header-info">
-                    <div id="account-header-name" class="account-header-name">Лакал. Режим</div>
+                    <div id="account-header-name" class="account-header-name">Локальный профиль</div>
                 </div>
             </div>
             <h1 class="character-menu-title">
@@ -67,49 +67,80 @@
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
         <div id="workshop-battle-view" class="workshop-battle-view"></div>
-        <div class="app-version-mark">IntListPC v1.4.1<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.4.2<br>by RubiDus</div>
     </div>
 </div>
 
-<div id="accountModal" class="modal"><div class="modal-content account-modal">
-    <h3>Аккаунт</h3>
+<div id="accountModal" class="modal"><div class="modal-content account-modal account-page-modal">
+    <div class="account-page-head">
+        <h3>Профиль</h3>
+        <button type="button" onclick="closeModal('accountModal')" class="account-page-close" title="Закрыть" aria-label="Закрыть">×</button>
+    </div>
+    <div class="account-tabs">
+        <button type="button" id="account-tab-profile" class="account-tab active" onclick="switchAccountTab('profile')">Профиль</button>
+        <button type="button" id="account-tab-friends" class="account-tab" onclick="switchAccountTab('friends')">Друзья</button>
+    </div>
 
-    <div id="account-menu-view" class="account-view active">
-        <button type="button" class="account-avatar-preview" onclick="openProfileAvatarPicker()" title="Сменить аватарку" aria-label="Сменить аватарку"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></button>
-        <div id="account-nickname-label" class="account-nickname-label">Лакал. Режим</div>
-        <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
+    <div id="account-profile-panel" class="account-panel active">
+        <div id="account-menu-view" class="account-view active">
+            <button type="button" class="account-avatar-preview" onclick="openProfileAvatarPicker()" title="Сменить аватарку" aria-label="Сменить аватарку"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></button>
+            <div id="account-nickname-label" class="account-nickname-label">Лакал. Режим</div>
+            <div id="account-modal-info" class="account-modal-info">Создай аккаунт или войди в существующий.</div>
 
-        <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
-            <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
-            <span><b>Автосинхронизация</b></span>
-        </label>
-        <label id="account-workshop-wrap" class="account-sync-toggle account-workshop-toggle" for="account-workshop-toggle">
-            <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
-            <span><b>Мастерская</b></span>
-        </label>
+            <label id="account-auto-sync-wrap" class="account-sync-toggle" for="account-auto-sync-toggle">
+                <input type="checkbox" id="account-auto-sync-toggle" onchange="toggleAccountAutoSync(this.checked)">
+                <span><b>Автосинхронизация</b></span>
+            </label>
+            <label id="account-workshop-wrap" class="account-sync-toggle account-workshop-toggle" for="account-workshop-toggle">
+                <input type="checkbox" id="account-workshop-toggle" onchange="toggleAccountWorkshop(this.checked)">
+                <span><b>Мастерская</b></span>
+            </label>
 
-        <div id="account-menu-actions" class="account-menu-actions">
-            <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
-            <button type="button" onclick="openAccountLoginForm()" class="btn-sec">ВОЙТИ В АККАУНТ</button>
+            <div id="account-menu-actions" class="account-menu-actions">
+                <button type="button" onclick="openAccountCreateForm()" class="btn-primary">СОЗДАТЬ АККАУНТ</button>
+                <button type="button" onclick="openAccountLoginForm()" class="btn-sec">ВОЙТИ В АККАУНТ</button>
+            </div>
+            <button type="button" id="account-logout-btn" onclick="logoutNicknameAccount()" class="btn-sec danger">ВЫЙТИ</button>
         </div>
-        <button type="button" id="account-logout-btn" onclick="logoutNicknameAccount()" class="btn-sec danger">ВЫЙТИ</button>
+
+        <div id="account-create-view" class="account-view">
+            <label class="l">Имя нового аккаунта</label>
+            <input type="text" id="account-create-nickname-input" maxlength="13" autocomplete="nickname" placeholder="Введите имя">
+            <button type="button" onclick="createNicknameAccount()" class="btn-primary">СОЗДАТЬ</button>
+            <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
+        </div>
+
+        <div id="account-login-view" class="account-view">
+            <label class="l">Имя существующего аккаунта</label>
+            <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
+            <button type="button" onclick="loginExistingNicknameAccount()" class="btn-primary">ВОЙТИ</button>
+            <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
+        </div>
     </div>
 
-    <div id="account-create-view" class="account-view">
-        <label class="l">Имя нового аккаунта</label>
-        <input type="text" id="account-create-nickname-input" maxlength="13" autocomplete="nickname" placeholder="Введите имя">
-        <button type="button" onclick="createNicknameAccount()" class="btn-primary">СОЗДАТЬ</button>
-        <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
+    <div id="account-friends-panel" class="account-panel">
+        <div id="friends-login-note" class="friends-empty">Войди в профиль, чтобы искать друзей и получать отправления.</div>
+        <div id="friends-content" class="friends-content">
+            <div class="friends-search-row">
+                <input type="text" id="friend-search-input" maxlength="32" autocomplete="off" placeholder="Ник друга">
+                <button type="button" onclick="searchFriendByNickname()" class="btn-primary">НАЙТИ</button>
+            </div>
+            <div id="friend-search-result" class="friends-section"></div>
+            <div class="friends-section">
+                <div class="friends-section-title">Заявки</div>
+                <div id="friend-requests-list" class="friends-list"></div>
+            </div>
+            <div class="friends-section">
+                <div class="friends-section-title">Друзья</div>
+                <div id="friends-list" class="friends-list"></div>
+            </div>
+            <div class="friends-section">
+                <div class="friends-section-title">Отправления</div>
+                <div id="friend-inbox-list" class="friends-list"></div>
+            </div>
+            <div id="friend-character-send-panel" class="friend-send-panel"></div>
+        </div>
     </div>
-
-    <div id="account-login-view" class="account-view">
-        <label class="l">Имя существующего аккаунта</label>
-        <input type="text" id="account-nickname-input" maxlength="32" autocomplete="nickname" placeholder="Введите имя">
-        <button type="button" onclick="loginExistingNicknameAccount()" class="btn-primary">ВОЙТИ</button>
-        <button type="button" onclick="showAccountMenuView()" class="btn-sec">НАЗАД</button>
-    </div>
-
-    <button type="button" onclick="closeModal('accountModal')" class="btn-sec">ЗАКРЫТЬ</button>
 </div></div>
 
 <div id="cloudConfirmModal" class="modal"><div class="modal-content cloud-confirm-modal">
@@ -190,7 +221,7 @@
                     <div id="disp-hp" class="hp-numbers v" onclick="openModal('hpModal')">0 / 0 оз</div>
                     <div class="hp-bar-container" onclick="openModal('hpModal')">
                         <div id="hp-fill-bar" class="banner-hp-fill"></div>
-                        <div id="hp-temp-fill-bar" class="banner-hp-temp-fill"></div>
+                        <div id="hp-temp-fill-bar" class="banner-hp-fill hp-temp-fill"></div>
                     </div>
                 </div>
                 <div id="shield-bar-wrap" class="shield-bar-container" onclick="openModal('hpModal')">
@@ -510,15 +541,19 @@
     </div>
 
     <select id="atk-type"></select>
-    <div class="attack-damage-bonus-row">
-        <select id="atk-damage-bonus-mode" onchange="syncAttackDamageBonusControls()">
-            <option value="str">От силы</option>
-            <option value="custom">Своё</option>
-        </select>
-        <input type="number" id="atk-damage-bonus-value" value="0" step="1" placeholder="0">
-        <label class="attack-damage-bonus-check" for="atk-damage-bonus-enabled" title="Доп. урон">
-            <input type="checkbox" id="atk-damage-bonus-enabled" onchange="syncAttackDamageBonusControls()">
-        </label>
+    <label class="equipment-inline-toggle" for="atk-damage-bonus-enabled">
+        <input type="checkbox" id="atk-damage-bonus-enabled" onchange="syncAttackDamageBonusControls()">
+        <span>Добавлять бонус к урону</span>
+    </label>
+    <div class="atk-modal-grid" id="atk-damage-bonus-settings" style="grid-template-columns: 1fr 1fr;">
+        <div>
+            <label class="l">Источник</label>
+            <select id="atk-damage-bonus-mode" onchange="syncAttackDamageBonusControls()"><option value="str">Сила</option><option value="custom">Свой бонус</option></select>
+        </div>
+        <div>
+            <label class="l">Бонус</label>
+            <input type="number" id="atk-damage-bonus-value" value="0">
+        </div>
     </div>
 
     <div class="equipment-segment">
@@ -665,6 +700,10 @@
     <h3>Настройка шаблона</h3>
     <div class="feat-view-meta">Выбери фит из уже заполненных плашек других вкладок</div>
     <div id="my-feat-source-list" class="my-feat-source-list"></div>
+    <label id="my-feat-attack-toggle-wrap" class="feat-attack-toggle" for="my-feat-show-in-attacks">
+        <input type="checkbox" id="my-feat-show-in-attacks">
+        <span>Отображать в атаках</span>
+    </label>
     <button onclick="deleteMyFeatTemplate()" class="btn-sec" style="background:var(--hp-red); border:none;">УДАЛИТЬ ШАБЛОН</button>
     <button onclick="closeModal('myFeatTemplateModal')" class="btn-sec">ОТМЕНА</button>
 </div></div>
@@ -768,15 +807,13 @@
         </div>
         <label class="l" style="margin-top:8px;">Тип урона</label>
         <select id="equipment-weapon-damage-type"></select>
-        <div class="attack-damage-bonus-row">
-            <select id="equipment-weapon-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
-                <option value="str">От силы</option>
-                <option value="custom">Своё</option>
-            </select>
-            <input type="number" id="equipment-weapon-damage-bonus-value" value="0" step="1" placeholder="0">
-            <label class="attack-damage-bonus-check" for="equipment-weapon-damage-bonus-enabled" title="Доп. урон">
-                <input type="checkbox" id="equipment-weapon-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
-            </label>
+        <label class="equipment-inline-toggle" for="equipment-weapon-damage-bonus-enabled">
+            <input type="checkbox" id="equipment-weapon-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon')">
+            <span>Добавлять бонус к урону</span>
+        </label>
+        <div class="equipment-setting-grid two" id="equipment-weapon-damage-bonus-settings">
+            <div><label class="l">Источник</label><select id="equipment-weapon-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon')"><option value="str">Сила</option><option value="custom">Свой бонус</option></select></div>
+            <div><label class="l">Бонус</label><input type="number" id="equipment-weapon-damage-bonus-value" value="0"></div>
         </div>
         <button type="button" id="equipment-weapon-tags-toggle-btn" class="btn-sec atk-modal-tags-toggle" onclick="toggleEquipmentWeaponTagsSection()">ХЕШТЕГИ ▼</button>
         <div id="equipment-weapon-tags-section" class="atk-modal-tags-wrap">
@@ -802,15 +839,13 @@
             </div>
             <label class="l" style="margin-top:8px;">Тип урона</label>
             <select id="equipment-weapon2-damage-type"></select>
-            <div class="attack-damage-bonus-row">
-                <select id="equipment-weapon2-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
-                    <option value="str">От силы</option>
-                    <option value="custom">Своё</option>
-                </select>
-                <input type="number" id="equipment-weapon2-damage-bonus-value" value="0" step="1" placeholder="0">
-                <label class="attack-damage-bonus-check" for="equipment-weapon2-damage-bonus-enabled" title="Доп. урон">
-                    <input type="checkbox" id="equipment-weapon2-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
-                </label>
+            <label class="equipment-inline-toggle" for="equipment-weapon2-damage-bonus-enabled">
+                <input type="checkbox" id="equipment-weapon2-damage-bonus-enabled" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')">
+                <span>Добавлять бонус к урону</span>
+            </label>
+            <div class="equipment-setting-grid two" id="equipment-weapon2-damage-bonus-settings">
+                <div><label class="l">Источник</label><select id="equipment-weapon2-damage-bonus-mode" onchange="syncEquipmentDamageBonusControls('equipment-weapon2')"><option value="str">Сила</option><option value="custom">Свой бонус</option></select></div>
+                <div><label class="l">Бонус</label><input type="number" id="equipment-weapon2-damage-bonus-value" value="0"></div>
             </div>
         </div>
     </div>
@@ -944,7 +979,7 @@
 
     <div class="hp-modal-bars">
         <div class="hp-modal-bar-label"><span>Здоровье</span><span id="hp-modal-numbers">0 / 0</span></div>
-        <div class="hp-modal-bar-track"><div id="hp-modal-fill-bar" class="hp-modal-bar-fill"></div><div id="hp-modal-temp-fill-bar" class="hp-modal-bar-fill hp-modal-temp-fill"></div></div>
+        <div class="hp-modal-bar-track"><div id="hp-modal-fill-bar" class="hp-modal-bar-fill"></div><div id="hp-modal-temp-fill-bar" class="hp-modal-bar-fill hp-temp-fill"></div></div>
         <div id="hp-modal-shield-block" class="hp-modal-shield-block">
             <div class="hp-modal-bar-label"><span>Щит</span><span id="hp-modal-shield-numbers">0 / 0</span></div>
             <div class="hp-modal-bar-track"><div id="hp-modal-shield-fill" class="hp-modal-bar-fill hp-modal-shield-fill"></div></div>
@@ -963,7 +998,6 @@
             <input type="text" id="hp-calc-val" class="hp-keypad-input" value="" placeholder="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="setHpKeypadValue(this.value)">
             <div class="hp-keypad-actions">
                 <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyHpKeypad(1)">Лечение</button>
-                <button type="button" class="hp-key hp-key-action hp-key-temp" onclick="applyHpKeypad(2)">Временные</button>
                 <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyHpKeypad(-1)">Урон</button>
             </div>
         </div>
@@ -994,7 +1028,7 @@
     <label class="l">Текущие ОЗ</label>
     <input type="number" id="in-hp-cur" oninput="clampCurrentHPInput(); saveAll()">
     <label class="l">Временные ОЗ</label>
-    <input type="number" id="in-hp-temp" value="0" oninput="clampTempHPInput(); saveAll()">
+    <input type="number" id="in-hp-temp" value="0" min="0" oninput="saveAll()">
     <label class="l" id="hp-anc-label">ОЗ народа</label>
     <input type="number" id="in-hp-anc" value="8" oninput="saveAll()">
     <label class="l" id="hp-cls-label">ОЗ класса</label>
@@ -1054,9 +1088,9 @@
     </div>
     <div class="battle-hp-bars">
         <div class="hp-modal-bar-label"><span>Здоровье</span><span id="battle-hp-numbers">0 / 0</span></div>
-        <div class="hp-modal-bar-track"><div id="battle-hp-fill-bar" class="hp-modal-bar-fill"></div><div id="battle-hp-temp-fill-bar" class="hp-modal-bar-fill hp-modal-temp-fill"></div></div>
+        <div class="hp-modal-bar-track"><div id="battle-hp-fill-bar" class="hp-modal-bar-fill"></div><div id="battle-hp-temp-fill-bar" class="hp-modal-bar-fill hp-temp-fill"></div></div>
     </div>
-    <div class="atk-modal-grid battle-hp-field-grid">
+    <div class="atk-modal-grid">
         <div>
             <label class="l">Текущее ОЗ</label>
             <input type="number" id="battle-hp-current" value="0" oninput="updateBattleHpPreview()">
@@ -1067,7 +1101,7 @@
         </div>
         <div>
             <label class="l">Временные ОЗ</label>
-            <input type="number" id="battle-hp-temp" value="0" oninput="updateBattleHpPreview()">
+            <input type="number" id="battle-hp-temp" value="0" min="0" oninput="updateBattleHpPreview()">
         </div>
     </div>
     <div id="battle-hp-keypad-shell" class="hp-keypad-shell open battle-hp-keypad">
@@ -1075,7 +1109,6 @@
             <input type="text" id="battle-hp-calc" class="hp-keypad-input" value="" placeholder="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             <div class="hp-keypad-actions">
                 <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyBattleHpKeypad(1)">Лечение</button>
-                <button type="button" class="hp-key hp-key-action hp-key-temp" onclick="applyBattleHpKeypad(2)">Временные</button>
                 <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyBattleHpKeypad(-1)">Урон</button>
             </div>
         </div>
@@ -1168,7 +1201,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.4.1"></script>
+<script src="js/app.js?v=1.4.2"></script>
 
 <div class="footer-spacer"></div>
 </body>

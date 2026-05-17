@@ -2818,3 +2818,112 @@ body.battle-sheet-embed .feat-card {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* 1.5.2 profile/friends/cloud polish */
+.character-menu-header {
+    position: relative;
+    z-index: 220;
+    overflow: visible !important;
+}
+.character-menu-toolbar {
+    position: relative;
+    z-index: 20;
+}
+.cloud-action-buttons {
+    z-index: 260 !important;
+}
+.cloud-action-menu {
+    z-index: 320 !important;
+    min-width: 150px;
+}
+.cloud-auto-toggle {
+    margin: 6px 0 0;
+}
+.account-nickname-label {
+    display: none !important;
+}
+.account-profile-side {
+    grid-template-rows: 48px 48px;
+}
+.account-profile-tools {
+    align-self: start;
+}
+.account-pin-panel {
+    display: grid;
+    min-height: 48px;
+    padding: 5px;
+    border-radius: 15px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.36);
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.account-pin-panel.active {
+    display: grid;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    border-color: rgba(139, 92, 246, 0.45);
+    background: rgba(139, 92, 246, 0.10);
+}
+.account-pin-panel input {
+    min-height: 36px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.20);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+.account-pin-panel button {
+    min-height: 36px;
+    border-radius: 11px;
+}
+.friends-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.friends-section-head .friends-section-title {
+    margin-bottom: 0;
+}
+.account-page-modal.friends-mode .friends-title-collapse-btn {
+    display: inline-flex;
+}
+.friends-title-collapse-btn {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 12px;
+    font-size: 20px;
+}
+.friends-list.collapsed {
+    grid-template-columns: repeat(4, 72px);
+    justify-content: start;
+    align-items: start;
+    gap: 10px;
+}
+.friend-avatar-only {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+.friend-avatar-only .friend-avatar {
+    border-radius: 16px;
+}
+@media (max-width: 640px) {
+    .account-profile-side {
+        grid-template-rows: 44px 46px;
+    }
+    .friends-list.collapsed {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .friend-avatar-only {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        border-radius: 16px;
+    }
+}

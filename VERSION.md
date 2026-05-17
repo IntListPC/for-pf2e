@@ -2,6 +2,8 @@
 
 Current version: `1.4.1`
 
+`1.5.2` - Profile title now uses the nickname, PIN layout is stable, friends collapse control moved into the friends block, cloud auto-sync moved below upload/download, and temporary HP returned to the calculator.
+
 `1.5` - Profile controls moved into compact settings/friends buttons; friends gained notification dots, separate search/request/inbox windows, collapsible friend avatars, cleanup menus, and send-all character delivery.
 
 `1.4.2` - Profile modal rebuilt as a profile page with a Friends tab; cloud profile snapshots now carry friends, friend requests, and incoming character sends.

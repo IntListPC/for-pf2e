@@ -7104,7 +7104,8 @@ ${getCleanFeatType(slot.type)}`;
         const title = document.getElementById('account-modal-title');
         const icon = document.getElementById('account-title-icon');
         const closeBtn = document.getElementById('account-page-close');
-        if (title) title.innerText = accountCurrentTab === 'friends' ? 'Друзья' : 'Профиль';
+        const profile = cloudUser || readAccountProfile();
+        if (title) title.innerText = accountCurrentTab === 'friends' ? 'Друзья' : (profile?.nickname || 'Аккаунт');
         if (icon) {
             icon.classList.toggle('profile', accountCurrentTab === 'profile');
             icon.classList.toggle('friends', accountCurrentTab === 'friends');
@@ -7252,7 +7253,7 @@ ${getCleanFeatType(slot.type)}`;
         const social = getCurrentAccountSocial();
         const counts = getAccountSocialCounts(social);
         if (countEl) countEl.innerText = `${counts.friends}/${MAX_FRIENDS}`;
-        if (collapseBtn) collapseBtn.innerText = friendsListCollapsed ? '›' : '⌄';
+        if (collapseBtn) collapseBtn.innerText = friendsListCollapsed ? '▾' : '▴';
         if (section) section.classList.toggle('collapsed', friendsListCollapsed);
         if (message) setFriendsStatus(message, { error: isAccountErrorMessage(message) });
         if (requestsEl) {
@@ -7740,7 +7741,10 @@ ${getCleanFeatType(slot.type)}`;
         const avatar = profile?.avatar || getDefaultProfileIcon();
         if (icon) icon.src = avatar;
         if (avatarPreview) avatarPreview.src = avatar;
-        if (nicknameLabel) nicknameLabel.innerText = profile?.nickname || 'Лакал. Режим';
+        if (nicknameLabel) {
+            nicknameLabel.innerText = profile?.nickname || 'Локал. Режим';
+            nicknameLabel.style.display = 'none';
+        }
         if (actions) actions.classList.toggle('active', loggedIn);
         document.querySelectorAll('[data-account-auto-sync-toggle]').forEach(toggle => {
             toggle.checked = !!profile?.autoSync;
@@ -7756,7 +7760,7 @@ ${getCleanFeatType(slot.type)}`;
         if (modal) modal.classList.toggle('local-mode', !loggedIn);
         if (!loggedIn && accountCurrentTab === 'friends') switchAccountTab('profile');
         const title = document.getElementById('account-modal-title');
-        if (title && accountCurrentTab === 'profile') title.innerText = loggedIn ? 'Профиль' : 'Аккаунт';
+        if (title && accountCurrentTab === 'profile') title.innerText = loggedIn ? profile.nickname : 'Аккаунт';
         updateAccountSummary(message);
         updateAccountNotificationDots();
         renderAccountSettingsMenu();
@@ -8725,7 +8729,7 @@ ${getCleanFeatType(slot.type)}`;
             menu.innerHTML = '<button type="button" class="cloud-menu-note workshop-sync-note" onclick="announceWorkshopSyncUnavailable(event)"><span>Синхронизация Мастерской</span><span>Пока не Возможна</span></button>';
         } else {
             const autoChecked = isAccountAutoSyncEnabled() ? 'checked' : '';
-            menu.innerHTML = `<label class="cloud-auto-toggle" onclick="event.stopPropagation()"><span>Авто.</span><input type="checkbox" data-account-auto-sync-toggle ${autoChecked} onchange="toggleAccountAutoSync(this.checked)"><b></b></label><button type="button" onclick="handleCloudMenuSave(event)">В Облако</button><button type="button" onclick="handleCloudMenuLoad(event)">Из Облака</button>`;
+            menu.innerHTML = `<button type="button" onclick="handleCloudMenuSave(event)">В Облако</button><button type="button" onclick="handleCloudMenuLoad(event)">Из Облака</button><label class="cloud-auto-toggle" onclick="event.stopPropagation()"><span>Авто.</span><input type="checkbox" data-account-auto-sync-toggle ${autoChecked} onchange="toggleAccountAutoSync(this.checked)"><b></b></label>`;
         }
         menu.classList.toggle('active', !!cloudActionMenuOpen);
     }

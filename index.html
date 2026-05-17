@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.5">
+    <link rel="stylesheet" href="css/styles.css?v=1.5.2">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -67,7 +67,7 @@
         </div>
         <div id="character-list" class="character-list"><div class="character-empty">Загружаю список персонажей...</div></div>
         <div id="workshop-battle-view" class="workshop-battle-view"></div>
-        <div class="app-version-mark">IntListPC v1.5<br>by RubiDus</div>
+        <div class="app-version-mark">IntListPC v1.5.2<br>by RubiDus</div>
     </div>
 </div>
 
@@ -76,7 +76,6 @@
         <div class="account-title-wrap">
             <span id="account-title-icon" class="account-title-icon profile" aria-hidden="true">👤</span>
             <h3 id="account-modal-title">Профиль</h3>
-            <button type="button" id="friends-title-collapse-btn" class="friends-title-collapse-btn" onclick="toggleFriendsListCollapsed()" title="Свернуть друзей" aria-label="Свернуть друзей">›</button>
         </div>
         <button type="button" id="account-page-close" onclick="handleAccountCloseButton()" class="account-page-close" title="Закрыть" aria-label="Закрыть">×</button>
     </div>
@@ -87,8 +86,8 @@
             <button type="button" class="account-avatar-preview" onclick="openProfileAvatarPicker()" title="Сменить аватарку" aria-label="Сменить аватарку"><img id="account-avatar-img" src="assets/icons/favicon.png" alt=""></button>
             <div class="account-profile-side">
                 <div id="account-profile-tools" class="account-profile-tools">
-                    <button type="button" class="account-tool-btn" onclick="toggleAccountSettingsMenu(event)" title="Настройки" aria-label="Настройки"><span>⚙</span><b>Настройки</b></button>
                     <button type="button" id="account-friends-btn" class="account-tool-btn friend" onclick="switchAccountTab('friends')" title="Друзья" aria-label="Друзья"><span>👥</span><b>Друзья</b><i class="account-notification-dot"></i></button>
+                    <button type="button" class="account-tool-btn" onclick="toggleAccountSettingsMenu(event)" title="Настройки" aria-label="Настройки"><span>⚙</span><b>Настройки</b></button>
                     <div id="account-settings-menu" class="character-context-menu account-settings-menu" onclick="event.stopPropagation()">
                         <label class="account-mini-toggle" for="account-workshop-toggle">
                             <span>Мастерская</span>
@@ -158,7 +157,10 @@
                 <button type="button" id="friend-requests-btn" class="friends-action-btn" onclick="openFriendRequestsModal()">Заявки<i class="account-notification-dot"></i></button>
             </div>
             <div id="friends-main-section" class="friends-section friends-main-section">
-                <div class="friends-section-title">Друзья</div>
+                <div class="friends-section-head">
+                    <div class="friends-section-title">Друзья</div>
+                    <button type="button" id="friends-title-collapse-btn" class="friends-title-collapse-btn" onclick="toggleFriendsListCollapsed()" title="Свернуть друзей" aria-label="Свернуть друзей">▾</button>
+                </div>
                 <div id="friends-list" class="friends-list"></div>
             </div>
             <div id="friend-character-send-panel" class="friend-send-panel"></div>
@@ -1044,6 +1046,7 @@
             <div class="hp-keypad-actions">
                 <button type="button" class="hp-key hp-key-action hp-key-heal" onclick="applyHpKeypad(1)">Лечение</button>
                 <button type="button" class="hp-key hp-key-action hp-key-damage" onclick="applyHpKeypad(-1)">Урон</button>
+                <button type="button" class="hp-key hp-key-action hp-key-temp" onclick="applyHpKeypad(2)">Врем. ОЗ</button>
             </div>
         </div>
 
@@ -1246,7 +1249,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.5"></script>
+<script src="js/app.js?v=1.5.2"></script>
 
 <div class="footer-spacer"></div>
 </body>

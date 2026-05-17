@@ -2459,9 +2459,10 @@ body.battle-sheet-embed .feat-card {
 .account-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
 .account-tab { min-height: 44px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.30); background: rgba(15, 23, 42, 0.44); color: var(--text-dim); font-size: 12px; font-weight: 950; text-transform: uppercase; }
 .account-tab.active { color: #ffffff; background: rgba(139, 92, 246, 0.20); border-color: rgba(139, 92, 246, 0.72); box-shadow: 0 0 16px rgba(139, 92, 246, 0.16); }
-.account-panel { display: none; min-height: 0; overflow: auto; padding: 2px; }
+.account-panel { display: none; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 2px; }
 .account-panel.active { display: block; }
 .account-panel #account-menu-view { text-align: center; }
+.account-view { max-width: 100%; overflow-x: hidden; }
 .friends-content { display: none; }
 .friends-content.active { display: block; }
 .friends-search-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; margin-bottom: 12px; }
@@ -2682,6 +2683,8 @@ body.battle-sheet-embed .feat-card {
 }
 .account-profile-main {
     width: 100%;
+    max-width: 100%;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 108px minmax(0, 1fr);
     align-items: center;
@@ -2695,16 +2698,19 @@ body.battle-sheet-embed .feat-card {
 }
 .account-profile-side {
     min-width: 0;
+    max-width: 100%;
     display: grid;
     gap: 10px;
 }
 .account-profile-tools {
     width: 100%;
+    min-width: 0;
     justify-content: stretch;
     gap: 9px;
     margin: 0;
 }
 .account-tool-btn {
+    min-width: 0;
     width: auto;
     height: 48px;
     flex: 1 1 0;
@@ -2733,11 +2739,16 @@ body.battle-sheet-embed .feat-card {
     display: none;
     grid-template-columns: minmax(0, 1fr) 46px;
     gap: 8px;
+    max-width: 100%;
+    min-width: 0;
 }
 .account-pin-panel.active {
     display: grid;
 }
 .account-pin-panel input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     margin: 0;
     min-height: 42px;
     text-align: center;
@@ -2753,7 +2764,7 @@ body.battle-sheet-embed .feat-card {
     font-size: 18px;
 }
 .account-login-pin-wrap {
-    display: none;
+    display: block;
     margin-top: 10px;
 }
 .account-login-pin-wrap.active {
@@ -2878,6 +2889,57 @@ body.battle-sheet-embed .feat-card {
     min-height: 36px;
     border-radius: 11px;
 }
+#account-login-view.active {
+    display: grid;
+    gap: 12px;
+}
+#account-login-view .l {
+    margin: 0 0 -5px;
+    color: #dbeafe;
+    font-size: 11px;
+    font-weight: 950;
+}
+#account-login-view input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 54px;
+    margin: 0;
+    border-radius: 15px;
+    border: 1px solid rgba(191, 219, 254, 0.42);
+    background: rgba(226, 239, 255, 0.96);
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 800;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+}
+#account-login-view .account-login-pin-wrap {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    margin: 4px 0 0;
+}
+#account-login-view .account-login-pin-wrap .l {
+    margin: 0;
+    white-space: nowrap;
+}
+#account-login-view #account-login-pin-input {
+    min-height: 44px;
+    border-radius: 13px;
+    background: rgba(248, 250, 252, 0.98);
+    text-align: center;
+    letter-spacing: 0.32em;
+    font-size: 18px;
+    font-weight: 900;
+    padding-left: 18px;
+}
+#account-login-view .btn-primary,
+#account-login-view .btn-sec {
+    min-height: 52px;
+    margin-top: 0;
+    border-radius: 15px;
+    font-size: 16px;
+}
 .friends-section-head {
     display: flex;
     align-items: center;
@@ -2915,6 +2977,13 @@ body.battle-sheet-embed .feat-card {
 @media (max-width: 640px) {
     .account-profile-side {
         grid-template-rows: 44px 46px;
+    }
+    #account-login-view .account-login-pin-wrap {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+    #account-login-view #account-login-pin-input {
+        letter-spacing: 0.22em;
     }
     .friends-list.collapsed {
         grid-template-columns: repeat(4, minmax(0, 1fr));

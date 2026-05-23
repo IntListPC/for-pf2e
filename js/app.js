@@ -452,6 +452,7 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
     const SPELL_CATEGORIES = [
         { key: 'cantrip', label: 'Фокус' },
         { key: 'ranked', label: 'Заклинание' },
+        { key: 'extra', label: 'Доп. заклинание' },
         { key: 'focus', label: 'Фокусное' },
         { key: 'innate', label: 'Врожденное' },
         { key: 'ritual', label: 'Ритуал' }
@@ -1903,10 +1904,11 @@ ${getCleanFeatType(slot.type)}`;
     function renderSpellList(lvl = getCurrentSheetLevel()) {
         const list = document.getElementById('magic-spells-list');
         if (!list) return;
-        const order = ['cantrip', 'ranked', 'focus', 'innate', 'ritual'];
+        const order = ['cantrip', 'ranked', 'extra', 'focus', 'innate', 'ritual'];
         const titles = {
             cantrip: 'Фокусы',
             ranked: 'Заклинания',
+            extra: 'Доп. заклинания',
             focus: 'Фокусные заклинания',
             innate: 'Врожденные заклинания',
             ritual: 'Ритуалы'
@@ -1954,6 +1956,7 @@ ${getCleanFeatType(slot.type)}`;
             const max = getSpellSlotMaxForRank(spell.rank, lvl);
             return max > 0 ? `${getSpellSlotSpent(spell.rank, lvl)}/${max}` : 'нет ячеек';
         }
+        if (spell.category === 'extra') return `${spellSettings.extraSlotsSpent}/${spellSettings.extraSlotsMax} доп.`;
         if (spell.category === 'focus') return `${spellSettings.focusSpent}/${spellSettings.focusMax} фокус`;
         if (spell.category === 'innate') return `${spell.usesSpent}/${spell.usesMax}`;
         return 'без ресурса';
@@ -1961,6 +1964,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function canCastSpell(spell, lvl = getCurrentSheetLevel()) {
         if (spell.category === 'ranked') return getSpellSlotMaxForRank(spell.rank, lvl) > 0 && getSpellSlotSpent(spell.rank, lvl) < getSpellSlotMaxForRank(spell.rank, lvl);
+        if (spell.category === 'extra') return !!spellSettings.extraSlotsEnabled && spellSettings.extraSlotsMax > 0 && spellSettings.extraSlotsSpent < spellSettings.extraSlotsMax;
         if (spell.category === 'focus') return spellSettings.focusMax > 0 && spellSettings.focusSpent < spellSettings.focusMax;
         if (spell.category === 'innate') return spell.usesSpent < spell.usesMax;
         return true;
@@ -2053,6 +2057,13 @@ ${getCleanFeatType(slot.type)}`;
                 appendDiceLog(`<div class="dice-log-rest-content">Нет ячеек ${spell.rank} ранга</div>`, 'var(--hp-red)', 'dice-log-rest');
                 return;
             }
+        } else if (spell.category === 'extra') {
+            spellSettings = normalizeSpellSettings(spellSettings);
+            if (!spellSettings.extraSlotsEnabled || spellSettings.extraSlotsMax <= 0 || spellSettings.extraSlotsSpent >= spellSettings.extraSlotsMax) {
+                appendDiceLog('<div class="dice-log-rest-content">Доп. ячейки закончились</div>', 'var(--hp-red)', 'dice-log-rest');
+                return;
+            }
+            spellSettings.extraSlotsSpent += 1;
         } else if (spell.category === 'focus') {
             if (spellSettings.focusMax <= 0 || spellSettings.focusSpent >= spellSettings.focusMax) {
                 appendDiceLog('<div class="dice-log-rest-content">Фокус закончился</div>', 'var(--hp-red)', 'dice-log-rest');

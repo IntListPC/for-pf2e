@@ -1772,6 +1772,7 @@ ${getCleanFeatType(slot.type)}`;
             usesMax,
             usesSpent: Math.max(0, Math.min(usesMax, parseInt(spell.usesSpent) || 0)),
             link: String(spell.link || '').trim(),
+            roll: String(spell.roll || '').trim().replace(/d/gi, 'к'),
             short: String(spell.short || '').trim(),
             full: String(spell.full || '').trim()
         };
@@ -1932,6 +1933,7 @@ ${getCleanFeatType(slot.type)}`;
         const short = spell.short || '';
         const canCast = canCastSpell(spell, lvl);
         const linkBtn = spell.link ? `<button type="button" class="magic-gear-btn magic-link-btn" onclick="event.stopPropagation(); openSpellLink('${spell.id}')" title="Открыть ссылку">🌐</button>` : '';
+        const rollBtn = spell.roll ? `<button type="button" class="magic-gear-btn magic-roll-btn" onclick="event.stopPropagation(); rollSpellDice('${spell.id}')" title="Бросить кубики">🎲</button>` : '';
         return `<div class="magic-spell-card ${escapeHtml(spell.category)}">
             <div class="magic-spell-main" onclick="openSpellEditor('${spell.id}')">
                 <div class="magic-spell-name">${escapeHtml(name)}</div>
@@ -1940,10 +1942,17 @@ ${getCleanFeatType(slot.type)}`;
             </div>
             <div class="magic-spell-actions">
                 ${linkBtn}
+                ${rollBtn}
                 <button type="button" class="magic-cast-btn" onclick="event.stopPropagation(); castSpell('${spell.id}')" title="Использовать"${canCast ? '' : ' disabled'}>✓</button>
                 <button type="button" class="magic-gear-btn" onclick="event.stopPropagation(); openSpellEditor('${spell.id}')" title="Настроить">⚙</button>
             </div>
         </div>`;
+    }
+
+    function rollSpellDice(spellId) {
+        const spell = spells.find(x => String(x.id) === String(spellId));
+        if (!spell) return;
+        rollFormula(spell.name || 'Заклинание', spell.roll || '', 'var(--hp-temp)');
     }
 
     function openSpellLink(spellId) {
@@ -2099,6 +2108,7 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('spell-category').value = spell?.category || 'ranked';
         document.getElementById('spell-name').value = spell?.name || '';
         document.getElementById('spell-link').value = spell?.link || '';
+        document.getElementById('spell-roll').value = spell?.roll || '';
         document.getElementById('spell-rank').value = spell?.rank || getSpellMaxRank();
         document.getElementById('spell-actions').value = spell?.actions || '2';
         document.getElementById('spell-uses-max').value = spell?.usesMax || 1;
@@ -2129,6 +2139,7 @@ ${getCleanFeatType(slot.type)}`;
             usesMax: document.getElementById('spell-uses-max').value,
             usesSpent: spells.find(x => String(x.id) === String(id))?.usesSpent || 0,
             link: document.getElementById('spell-link').value,
+            roll: document.getElementById('spell-roll').value,
             short: document.getElementById('spell-short').value,
             full: document.getElementById('spell-full').value
         });
@@ -3595,22 +3606,44 @@ ${getCleanFeatType(slot.type)}`;
         if (isWorkshopSheetRestricted()) return;
         const lvl = clampLevel(document.getElementById('in-lvl').value); document.getElementById('in-lvl').value = lvl;
         const con = parseInt(document.getElementById('score-con').value) || 0;
-        const recovery = Math.max(0, lvl + con);
+        const recovery = getLongRestHpRecovery(lvl, con);
         document.getElementById('rest-hp-msg').innerText = `+${recovery} HP`;
         document.getElementById('rest-wound-msg').style.display = (parseInt(document.getElementById('in-wounds').value)||0) > 0 ? 'block' : 'none';
         openModal('restModal');
+    }
+
+    function getLongRestHpRecovery(lvl = 1, con = 0) {
+        return Math.max(1, parseInt(con) || 0) * clampLevel(lvl || 1);
+    }
+
+    function resetRestRecoverableState() {
+        const tempHpEl = document.getElementById('in-hp-temp');
+        if (tempHpEl) tempHpEl.value = 0;
+
+        const hpCritDamageEl = document.getElementById('hp-critical-damage');
+        if (hpCritDamageEl) hpCritDamageEl.checked = false;
+
+        const shieldRaisedEl = document.getElementById('shield-raised');
+        if (shieldRaisedEl) shieldRaisedEl.checked = false;
+        const shieldBlockEl = document.getElementById('use-shield-damage');
+        if (shieldBlockEl) shieldBlockEl.checked = false;
+
+        attackMapPenaltyCount = 0;
+        attackCourageCount = 0;
+        activeCritAttacks = {};
+        resetSpellResources(true);
     }
 
     function doRest() {
         if (isWorkshopSheetRestricted()) return;
         const lvl = clampLevel(document.getElementById('in-lvl').value); document.getElementById('in-lvl').value = lvl;
         const con = parseInt(document.getElementById('score-con').value) || 0;
-        const recovery = Math.max(0, lvl + con);
+        const recovery = getLongRestHpRecovery(lvl, con);
         let curHP = parseInt(document.getElementById('in-hp-cur').value) || 0;
         const currentMaxHP = (parseInt(document.getElementById('in-hp-anc').value) || 0) + ((parseInt(document.getElementById('in-hp-cls').value) || 0) + con) * lvl;
         document.getElementById('in-hp-cur').value = Math.min(currentMaxHP, curHP + recovery);
         document.getElementById('in-wounds').value = 0; dyingLevel = 0; lastDeathCheck = null;
-        resetSpellResources(true);
+        resetRestRecoverableState();
         saveAll(); closeModal('restModal');
         appendRestLog(recovery);
     }
@@ -4674,7 +4707,7 @@ ${getCleanFeatType(slot.type)}`;
     });
 
     function appendRestLog(recovery) {
-        appendDiceLog(`<div class="dice-log-rest-content">Отдых +${recovery} HP</div>`, 'var(--hp-green)', 'dice-log-rest');
+        appendDiceLog(`<div class="dice-log-rest-content">Отдых +${recovery} HP · ресурсы восстановлены</div>`, 'var(--hp-green)', 'dice-log-rest');
     }
 
     function toggleAttackTags(id) {
@@ -9605,6 +9638,15 @@ ${getCleanFeatType(slot.type)}`;
         saveSaveBonusModal,
         clearSaveBonusModal,
         saveLevelInput,
+        setHeroPoints,
+        setWounds,
+        openRestMenu,
+        doRest,
+        repairShield,
+        toggleShieldCheckbox,
+        toggleHpCriticalDamage,
+        applyHpKeypadState,
+        applyHpKeypad,
         openProfileAvatarPicker,
         handleProfileAvatar,
         saveAccountToCloud,
@@ -9618,6 +9660,7 @@ ${getCleanFeatType(slot.type)}`;
         confirmCloudChoice,
         openExternalUrlFromInput,
         openSpellLink,
+        rollSpellDice,
         toggleMagicTradition,
         setMagicCastingType,
         setMagicProf,

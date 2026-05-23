@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.5.9">
+    <link rel="stylesheet" href="css/styles.css?v=1.5.10">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -1235,6 +1235,8 @@
         <input type="text" id="spell-link" placeholder="https://...">
         <button type="button" class="external-link-open" onclick="openExternalUrlFromInput('spell-link')" title="Открыть ссылку">🌐</button>
     </div>
+    <label class="l">Бросок кубиков</label>
+    <input type="text" id="spell-roll" oninput="this.value=this.value.replace(/d/gi, 'к')" placeholder="2к6+4">
     <div class="atk-modal-grid">
         <div id="spell-rank-wrap">
             <label class="l">Ранг</label>
@@ -1277,7 +1279,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.5.9"></script>
+<script src="js/app.js?v=1.5.12"></script>
 
 <div class="footer-spacer"></div>
 </body>

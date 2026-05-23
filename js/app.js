@@ -411,7 +411,11 @@ const LEGACY_SHEET_KEY = 'pf2_remaster_v22';
         prof: 0,
         item: 0,
         focusMax: 1,
-        focusSpent: 0
+        focusSpent: 0,
+        extraSlotsEnabled: false,
+        extraSlotsMax: 0,
+        extraSlotsSpent: 0,
+        extraSlotsNotes: ''
     };
     let currentSpellId = null;
 
@@ -1124,7 +1128,7 @@ ${getCleanFeatType(slot.type)}`;
     }
 
     function isFeatFilled(data) {
-        return !!(data && (String(data.name || '').trim() || String(data.short || '').trim() || String(data.full || '').trim()));
+        return !!(data && (String(data.name || '').trim() || String(data.short || '').trim() || String(data.full || '').trim() || String(data.link || '').trim()));
     }
 
     function switchFeatTab(tabKey) {
@@ -1606,6 +1610,7 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('feat-name').value = data.name || '';
         document.getElementById('feat-short').value = data.short || '';
         document.getElementById('feat-full').value = data.full || '';
+        document.getElementById('feat-link').value = data.link || '';
         const attackCb = document.getElementById('feat-show-in-attacks');
         const attackWrap = document.getElementById('feat-show-in-attacks-wrap');
         const attackNote = document.getElementById('feat-show-in-attacks-note');
@@ -1632,6 +1637,7 @@ ${getCleanFeatType(slot.type)}`;
             name: document.getElementById('feat-name').value.trim(),
             short: document.getElementById('feat-short').value.trim(),
             full: document.getElementById('feat-full').value.trim(),
+            link: document.getElementById('feat-link').value.trim(),
             showInAttacks: !!(canShowInAttacks && document.getElementById('feat-show-in-attacks')?.checked)
         };
         if (isFeatFilled(data)) feats[slotId] = data;
@@ -1668,8 +1674,15 @@ ${getCleanFeatType(slot.type)}`;
         currentFeatViewMode = mode === 'short' ? 'short' : 'full';
         document.getElementById('feat-view-title').innerText = `${String(data.emoji || '').trim() ? String(data.emoji || '').trim() + ' ' : ''}${String(data.name || '').trim() || getCleanFeatType(slot.type)}`;
         document.getElementById('feat-view-meta').innerText = formatFeatFullMeta(slot);
+        const linkBtn = document.getElementById('feat-view-link-btn');
+        if (linkBtn) linkBtn.style.display = String(data.link || '').trim() ? '' : 'none';
         updateFeatViewText();
         openModal('featViewModal');
+    }
+
+    function openFeatViewLink() {
+        if (!currentFeatViewSlotId) return;
+        openExternalUrl(feats[currentFeatViewSlotId]?.link || '');
     }
 
     function updateFeatViewText() {
@@ -1705,9 +1718,27 @@ ${getCleanFeatType(slot.type)}`;
         return `sp${Date.now()}${Math.floor(Math.random() * 1000)}`;
     }
 
+    function normalizeExternalUrl(url = '') {
+        const clean = String(url || '').trim();
+        if (!clean) return '';
+        return /^[a-z][a-z0-9+.-]*:\/\//i.test(clean) ? clean : `https://${clean}`;
+    }
+
+    function openExternalUrl(url = '') {
+        const normalized = normalizeExternalUrl(url);
+        if (!normalized) return;
+        window.open(normalized, '_blank', 'noopener');
+    }
+
+    function openExternalUrlFromInput(inputId) {
+        openExternalUrl(document.getElementById(inputId)?.value || '');
+    }
+
     function normalizeSpellSettings(source = {}) {
         const traditions = source.traditions || {};
         const focusMax = Math.max(0, Math.min(3, parseInt(source.focusMax) || 0));
+        const extraSlotsMax = Math.max(0, Math.min(20, parseInt(source.extraSlotsMax) || 0));
+        const extraSlotsEnabled = !!source.extraSlotsEnabled && extraSlotsMax > 0;
         return {
             traditions: {
                 arcane: !!traditions.arcane,
@@ -1720,7 +1751,11 @@ ${getCleanFeatType(slot.type)}`;
             prof: normalizeTrainingRank(source.prof),
             item: parseInt(source.item) || 0,
             focusMax,
-            focusSpent: Math.max(0, Math.min(focusMax, parseInt(source.focusSpent) || 0))
+            focusSpent: Math.max(0, Math.min(focusMax, parseInt(source.focusSpent) || 0)),
+            extraSlotsEnabled,
+            extraSlotsMax,
+            extraSlotsSpent: extraSlotsEnabled ? Math.max(0, Math.min(extraSlotsMax, parseInt(source.extraSlotsSpent) || 0)) : 0,
+            extraSlotsNotes: String(source.extraSlotsNotes || '').trim()
         };
     }
 
@@ -1735,6 +1770,7 @@ ${getCleanFeatType(slot.type)}`;
             actions: SPELL_ACTION_OPTIONS.some(opt => opt.key === spell.actions) ? spell.actions : '2',
             usesMax,
             usesSpent: Math.max(0, Math.min(usesMax, parseInt(spell.usesSpent) || 0)),
+            link: String(spell.link || '').trim(),
             short: String(spell.short || '').trim(),
             full: String(spell.full || '').trim()
         };
@@ -1794,9 +1830,16 @@ ${getCleanFeatType(slot.type)}`;
         const statEl = document.getElementById('magic-stat');
         const itemEl = document.getElementById('magic-item-bonus');
         const focusEl = document.getElementById('magic-focus-max');
+        const extraEnabledEl = document.getElementById('magic-extra-enabled');
+        const extraMaxEl = document.getElementById('magic-extra-max');
+        const extraNotesEl = document.getElementById('magic-extra-notes');
         if (statEl) statEl.value = spellSettings.stat;
         if (itemEl) itemEl.value = spellSettings.item;
         if (focusEl) focusEl.value = spellSettings.focusMax;
+        if (extraEnabledEl) extraEnabledEl.checked = !!spellSettings.extraSlotsEnabled;
+        if (extraMaxEl) extraMaxEl.value = spellSettings.extraSlotsMax;
+        if (extraNotesEl) extraNotesEl.value = spellSettings.extraSlotsNotes || '';
+        syncMagicExtraSlotsUi();
         document.getElementById('magic-prepared-btn')?.classList.toggle('active', spellSettings.castingType === 'prepared');
         document.getElementById('magic-spontaneous-btn')?.classList.toggle('active', spellSettings.castingType === 'spontaneous');
 
@@ -1835,6 +1878,14 @@ ${getCleanFeatType(slot.type)}`;
                 return `<button type="button" class="magic-slot-cell ${n <= focusSpent ? 'spent' : ''}" onclick="toggleFocusPoint(${n})" title="Фокус ${n}"></button>`;
             }).join('');
             rows.push(`<div class="magic-slot-row"><div class="magic-slot-rank">Ф</div><div class="magic-slot-cells">${cells}</div><div class="magic-slot-count">${focusSpent}/${spellSettings.focusMax}</div></div>`);
+        }
+        if (spellSettings.extraSlotsEnabled && spellSettings.extraSlotsMax > 0) {
+            const extraSpent = Math.max(0, Math.min(spellSettings.extraSlotsMax, parseInt(spellSettings.extraSlotsSpent) || 0));
+            const cells = Array.from({ length: spellSettings.extraSlotsMax }, (_, i) => {
+                const n = i + 1;
+                return `<button type="button" class="magic-slot-cell ${n <= extraSpent ? 'spent' : ''}" onclick="toggleExtraSpellSlot(${n})" title="Доп. ячейка ${n}"></button>`;
+            }).join('');
+            rows.push(`<div class="magic-slot-row"><div class="magic-slot-rank">Д</div><div class="magic-slot-cells">${cells}</div><div class="magic-slot-count">${extraSpent}/${spellSettings.extraSlotsMax}</div></div>`);
         }
         for (let rank = 1; rank <= maxRank; rank++) {
             const max = getSpellSlotMaxForRank(rank, level);
@@ -1878,6 +1929,7 @@ ${getCleanFeatType(slot.type)}`;
         const resource = getSpellResourceText(spell, lvl);
         const short = spell.short || '';
         const canCast = canCastSpell(spell, lvl);
+        const linkBtn = spell.link ? `<button type="button" class="magic-gear-btn magic-link-btn" onclick="event.stopPropagation(); openSpellLink('${spell.id}')" title="Открыть ссылку">🌐</button>` : '';
         return `<div class="magic-spell-card ${escapeHtml(spell.category)}">
             <div class="magic-spell-main" onclick="openSpellEditor('${spell.id}')">
                 <div class="magic-spell-name">${escapeHtml(name)}</div>
@@ -1885,10 +1937,16 @@ ${getCleanFeatType(slot.type)}`;
                 ${short ? `<div class="magic-spell-short">${escapeHtml(short)}</div>` : ''}
             </div>
             <div class="magic-spell-actions">
+                ${linkBtn}
                 <button type="button" class="magic-cast-btn" onclick="event.stopPropagation(); castSpell('${spell.id}')" title="Использовать"${canCast ? '' : ' disabled'}>✓</button>
                 <button type="button" class="magic-gear-btn" onclick="event.stopPropagation(); openSpellEditor('${spell.id}')" title="Настроить">⚙</button>
             </div>
         </div>`;
+    }
+
+    function openSpellLink(spellId) {
+        const spell = spells.find(x => String(x.id) === String(spellId));
+        openExternalUrl(spell?.link || '');
     }
 
     function getSpellResourceText(spell, lvl = getCurrentSheetLevel()) {
@@ -1931,14 +1989,26 @@ ${getCleanFeatType(slot.type)}`;
             ...spellSettings,
             stat: document.getElementById('magic-stat')?.value,
             item: document.getElementById('magic-item-bonus')?.value,
-            focusMax: document.getElementById('magic-focus-max')?.value
+            focusMax: document.getElementById('magic-focus-max')?.value,
+            extraSlotsEnabled: !!document.getElementById('magic-extra-enabled')?.checked,
+            extraSlotsMax: document.getElementById('magic-extra-max')?.value,
+            extraSlotsNotes: document.getElementById('magic-extra-notes')?.value
         });
+        syncMagicExtraSlotsUi();
         saveAll();
     }
 
     function openMagicSettingsModal() {
         const stat = document.getElementById('magic-stat');
         if (stat) stat.focus();
+    }
+
+    function syncMagicExtraSlotsUi() {
+        const enabled = !!document.getElementById('magic-extra-enabled')?.checked;
+        const maxInput = document.getElementById('magic-extra-max');
+        const wrap = document.getElementById('magic-extra-notes-wrap');
+        if (maxInput) maxInput.disabled = !enabled;
+        if (wrap) wrap.classList.toggle('open', enabled);
     }
 
     function toggleSpellSlot(rank, cellIndex) {
@@ -1953,6 +2023,14 @@ ${getCleanFeatType(slot.type)}`;
         spellSettings = normalizeSpellSettings(spellSettings);
         const current = spellSettings.focusSpent;
         spellSettings.focusSpent = cellIndex <= current ? Math.max(0, cellIndex - 1) : Math.min(spellSettings.focusMax, cellIndex);
+        saveAll();
+    }
+
+    function toggleExtraSpellSlot(cellIndex) {
+        spellSettings = normalizeSpellSettings(spellSettings);
+        if (!spellSettings.extraSlotsEnabled || spellSettings.extraSlotsMax <= 0) return;
+        const current = spellSettings.extraSlotsSpent;
+        spellSettings.extraSlotsSpent = cellIndex <= current ? Math.max(0, cellIndex - 1) : Math.min(spellSettings.extraSlotsMax, cellIndex);
         saveAll();
     }
 
@@ -1995,7 +2073,7 @@ ${getCleanFeatType(slot.type)}`;
 
     function resetSpellResources(silent = false) {
         spellSlotsSpent = {};
-        spellSettings = normalizeSpellSettings({ ...spellSettings, focusSpent: 0 });
+        spellSettings = normalizeSpellSettings({ ...spellSettings, focusSpent: 0, extraSlotsSpent: 0 });
         spells = spells.map(spell => normalizeSpell({ ...spell, usesSpent: 0 }));
         saveAll(false);
         calculate();
@@ -2009,6 +2087,7 @@ ${getCleanFeatType(slot.type)}`;
         document.getElementById('spell-id').value = spell?.id || '';
         document.getElementById('spell-category').value = spell?.category || 'ranked';
         document.getElementById('spell-name').value = spell?.name || '';
+        document.getElementById('spell-link').value = spell?.link || '';
         document.getElementById('spell-rank').value = spell?.rank || getSpellMaxRank();
         document.getElementById('spell-actions').value = spell?.actions || '2';
         document.getElementById('spell-uses-max').value = spell?.usesMax || 1;
@@ -2038,6 +2117,7 @@ ${getCleanFeatType(slot.type)}`;
             actions: document.getElementById('spell-actions').value,
             usesMax: document.getElementById('spell-uses-max').value,
             usesSpent: spells.find(x => String(x.id) === String(id))?.usesSpent || 0,
+            link: document.getElementById('spell-link').value,
             short: document.getElementById('spell-short').value,
             full: document.getElementById('spell-full').value
         });
@@ -2160,7 +2240,8 @@ ${getCleanFeatType(slot.type)}`;
                 }
             },
             short: String(item?.short || '').trim(),
-            full: String(item?.full || '').trim()
+            full: String(item?.full || '').trim(),
+            link: String(item?.link || '').trim()
         };
     }
 
@@ -2723,6 +2804,7 @@ ${getCleanFeatType(slot.type)}`;
         equipmentWeaponTagsExpanded = false;
         document.getElementById('equipment-item-short').value = item?.short || '';
         document.getElementById('equipment-item-full').value = item?.full || '';
+        document.getElementById('equipment-item-link').value = item?.link || '';
         setEquipmentLight(item ? !!item.light : defaultType === 'consumable');
         equipmentItemTypeChanged();
         syncEquipmentConsumableHealField();
@@ -2887,7 +2969,8 @@ ${getCleanFeatType(slot.type)}`;
                 }
             },
             short: document.getElementById('equipment-item-short').value,
-            full: document.getElementById('equipment-item-full').value
+            full: document.getElementById('equipment-item-full').value,
+            link: document.getElementById('equipment-item-link').value
         });
         const idx = equipmentItems.findIndex(x => String(x.id) === String(id));
         if (idx >= 0) equipmentItems[idx] = item;
@@ -2925,6 +3008,8 @@ ${getCleanFeatType(slot.type)}`;
         if (qty) metaParts.push(qty);
         if (!isWorkshopSheetRestricted() && isItemInBackpack(item.id)) metaParts.push('в рюкзаке');
         document.getElementById('equipment-view-meta').innerText = metaParts.join(' · ');
+        const linkBtn = document.getElementById('equipment-view-link-btn');
+        if (linkBtn) linkBtn.style.display = String(item.link || '').trim() ? '' : 'none';
         updateEquipmentViewText();
         openModal('equipmentViewModal');
     }
@@ -2952,6 +3037,11 @@ ${getCleanFeatType(slot.type)}`;
         if (!currentEquipmentViewItemId) return;
         closeModal('equipmentViewModal');
         openEquipmentEditor(currentEquipmentViewItemId);
+    }
+
+    function openEquipmentViewLink() {
+        const item = equipmentItems.find(x => String(x.id) === String(currentEquipmentViewItemId));
+        openExternalUrl(item?.link || '');
     }
 
     function toggleEquipmentBackpack(checked) {
@@ -8503,7 +8593,7 @@ ${getCleanFeatType(slot.type)}`;
             dyingLevel: 0, firstRun: true, attacks: [], attackTagsHiddenById: {}, attackNotes: '', attackQuickFeatIds: [],
             attackQuickFeatSelectionCustom: false, attackMapPenaltyCount: 0, attackCourageCount: 0,
             attackMapSettings: { enabled: true, penalty: -5 }, attackDcSettings: { stat: 'str', bonus: 0 }, lastDeathCheck: null,
-            spells: [], spellSlotsSpent: {}, spellSettings: { traditions: { arcane: false, occult: false, primal: false, divine: false }, castingType: 'prepared', stat: 'int', prof: 0, item: 0, focusMax: 1, focusSpent: 0 },
+            spells: [], spellSlotsSpent: {}, spellSettings: { traditions: { arcane: false, occult: false, primal: false, divine: false }, castingType: 'prepared', stat: 'int', prof: 0, item: 0, focusMax: 1, focusSpent: 0, extraSlotsEnabled: false, extraSlotsMax: 0, extraSlotsSpent: 0, extraSlotsNotes: '' },
             proficiencies: { armor: {}, weapon: {} },
             feats: {}, myFeats: [], currentFeatTab: 'my',
             equipmentItems: [], equipmentBackpack: [], equipmentSettings: { backpackEnabled: false, bulkBonus: 0, coins: { pp: 0, gp: 0, sp: 0, cp: 0 } }, currentEquipmentTab: 'carried',
@@ -8537,7 +8627,7 @@ ${getCleanFeatType(slot.type)}`;
         selectedMobileReorder = null; feats = {}; myFeats = []; currentFeatTab = 'my';
         equipmentItems = []; equipmentBackpack = []; equipmentSettings = { backpackEnabled: false, bulkBonus: 0, coins: { pp: 0, gp: 0, sp: 0, cp: 0 } }; currentEquipmentTab = 'carried';
         proficiencies = { armor: {}, weapon: {} };
-        spells = []; spellSlotsSpent = {}; spellSettings = { traditions: { arcane: false, occult: false, primal: false, divine: false }, castingType: 'prepared', stat: 'int', prof: 0, item: 0, focusMax: 1, focusSpent: 0 }; currentSpellId = null;
+        spells = []; spellSlotsSpent = {}; spellSettings = { traditions: { arcane: false, occult: false, primal: false, divine: false }, castingType: 'prepared', stat: 'int', prof: 0, item: 0, focusMax: 1, focusSpent: 0, extraSlotsEnabled: false, extraSlotsMax: 0, extraSlotsSpent: 0, extraSlotsNotes: '' }; currentSpellId = null;
         personalitySectionCollapsed = { origin: false, personality: false, proficiency: false }; currentPersonalityNoteIndex = 1;
     }
 
@@ -9515,6 +9605,11 @@ ${getCleanFeatType(slot.type)}`;
         startImportCharacterAsNew,
         confirmCloudDownload,
         confirmCloudChoice,
+        openExternalUrlFromInput,
+        openSpellLink,
+        toggleExtraSpellSlot,
+        openFeatViewLink,
+        openEquipmentViewLink,
         syncAttackDamageBonusControls,
         syncEquipmentDamageBonusControls,
         searchFriendByNickname,

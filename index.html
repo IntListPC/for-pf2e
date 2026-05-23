@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=1.5.2">
+    <link rel="stylesheet" href="css/styles.css?v=1.5.3">
 </head>
 <body class="main-menu-open app-booting">
 
@@ -516,6 +516,13 @@
                                     <label class="l">Фокус</label>
                                     <input type="number" id="magic-focus-max" min="0" max="3" value="1" oninput="saveMagicSettingsFromPage()">
                                 </div>
+                                <div class="magic-extra-field">
+                                    <label class="l">Доп. ячейки</label>
+                                    <div class="magic-extra-control">
+                                        <input type="checkbox" id="magic-extra-enabled" onchange="saveMagicSettingsFromPage()">
+                                        <input type="number" id="magic-extra-max" min="0" max="20" value="0" oninput="saveMagicSettingsFromPage()">
+                                    </div>
+                                </div>
                             </div>
                             <div class="magic-prof-row">
                                 <span>Умение в магии</span>
@@ -529,6 +536,10 @@
                         <div class="magic-card">
                             <div class="magic-section-title">Ячейки заклинаний</div>
                             <div id="magic-slots-list" class="magic-slots-list"></div>
+                            <div id="magic-extra-notes-wrap" class="magic-extra-notes-wrap">
+                                <label class="l">Описание доп. ячеек</label>
+                                <textarea id="magic-extra-notes" maxlength="1200" placeholder="Например: Купель жреца, ранги, условия восстановления..." oninput="saveMagicSettingsFromPage()"></textarea>
+                            </div>
                         </div>
                         <div class="magic-card">
                             <div class="magic-head">
@@ -724,6 +735,11 @@
     <textarea id="feat-short" maxlength="260" placeholder="Коротко: что делает эта черта"></textarea>
     <label class="l">Полное описание</label>
     <textarea id="feat-full" maxlength="4000" placeholder="Полный текст, условия, действия, частота и любые заметки"></textarea>
+    <label class="l">Ссылка</label>
+    <div class="external-link-row">
+        <input type="text" id="feat-link" placeholder="https://...">
+        <button type="button" class="external-link-open" onclick="openExternalUrlFromInput('feat-link')" title="Открыть ссылку">🌐</button>
+    </div>
     <button onclick="saveFeatSlot()" class="btn-primary">СОХРАНИТЬ</button>
     <button onclick="clearFeatSlot()" class="btn-sec" style="background:var(--hp-red); border:none;">ОЧИСТИТЬ СЛОТ</button>
     <button onclick="closeModal('featEditModal')" class="btn-sec">ОТМЕНА</button>
@@ -737,6 +753,7 @@
         <div id="feat-view-main-text" class="feat-view-text"></div>
     </div>
     <div class="feat-view-actions">
+        <button id="feat-view-link-btn" onclick="openFeatViewLink()" class="btn-sec external-link-view" title="Открыть ссылку">🌐</button>
         <button id="feat-view-settings-btn" onclick="openFeatEditorFromView()" class="btn-primary feat-view-settings">⚙ НАСТРОИТЬ</button>
         <button id="feat-view-toggle-btn" onclick="toggleFeatViewMode()" class="btn-sec feat-view-toggle">КРАТКО</button>
     </div>
@@ -900,6 +917,11 @@
     <textarea id="equipment-item-short" maxlength="260" placeholder="Коротко: что это и зачем"></textarea>
     <label class="l">Полное описание</label>
     <textarea id="equipment-item-full" maxlength="4000" placeholder="Свойства, заметки, цена, где лежит"></textarea>
+    <label class="l">Ссылка</label>
+    <div class="external-link-row">
+        <input type="text" id="equipment-item-link" placeholder="https://...">
+        <button type="button" class="external-link-open" onclick="openExternalUrlFromInput('equipment-item-link')" title="Открыть ссылку">🌐</button>
+    </div>
     <button onclick="saveEquipmentItem()" class="btn-primary">СОХРАНИТЬ</button>
     <button onclick="deleteEquipmentItem()" class="btn-sec" style="background:var(--hp-red); border:none;">УДАЛИТЬ</button>
     <button onclick="closeModal('equipmentItemModal')" class="btn-sec">ОТМЕНА</button>
@@ -913,6 +935,7 @@
         <div id="equipment-view-main-text" class="feat-view-text"></div>
     </div>
     <div class="equipment-view-actions">
+        <button id="equipment-view-link-btn" onclick="openEquipmentViewLink()" class="btn-sec external-link-view" title="Открыть ссылку">🌐</button>
         <button onclick="openEquipmentEditorFromView()" class="btn-primary equipment-view-settings">⚙ НАСТРОИТЬ</button>
         <button id="equipment-view-toggle-btn" onclick="toggleEquipmentViewMode()" class="btn-sec equipment-view-toggle">КРАТКО</button>
     </div>
@@ -1207,6 +1230,11 @@
     <select id="spell-category" onchange="syncSpellModalFields()"></select>
     <label class="l">Название</label>
     <input type="text" id="spell-name" placeholder="Огненный шар">
+    <label class="l">Ссылка</label>
+    <div class="external-link-row">
+        <input type="text" id="spell-link" placeholder="https://...">
+        <button type="button" class="external-link-open" onclick="openExternalUrlFromInput('spell-link')" title="Открыть ссылку">🌐</button>
+    </div>
     <div class="atk-modal-grid">
         <div id="spell-rank-wrap">
             <label class="l">Ранг</label>
@@ -1249,7 +1277,7 @@
     <button onclick="closeModal('pageNavModal')" class="btn-sec" style="margin-top: 15px;">ОТМЕНА</button>
 </div></div>
 
-<script src="js/app.js?v=1.5.2"></script>
+<script src="js/app.js?v=1.5.3"></script>
 
 <div class="footer-spacer"></div>
 </body>

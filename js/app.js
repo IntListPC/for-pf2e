@@ -1738,7 +1738,7 @@ ${getCleanFeatType(slot.type)}`;
         const traditions = source.traditions || {};
         const focusMax = Math.max(0, Math.min(3, parseInt(source.focusMax) || 0));
         const extraSlotsMax = Math.max(0, Math.min(20, parseInt(source.extraSlotsMax) || 0));
-        const extraSlotsEnabled = !!source.extraSlotsEnabled && extraSlotsMax > 0;
+        const extraSlotsEnabled = !!source.extraSlotsEnabled;
         return {
             traditions: {
                 arcane: !!traditions.arcane,
@@ -9607,7 +9607,20 @@ ${getCleanFeatType(slot.type)}`;
         confirmCloudChoice,
         openExternalUrlFromInput,
         openSpellLink,
+        toggleMagicTradition,
+        setMagicCastingType,
+        setMagicProf,
+        saveMagicSettingsFromPage,
+        openMagicSettingsModal,
+        toggleSpellSlot,
+        toggleFocusPoint,
         toggleExtraSpellSlot,
+        castSpell,
+        resetSpellResources,
+        openSpellEditor,
+        syncSpellModalFields,
+        saveSpell,
+        deleteSpell,
         openFeatViewLink,
         openEquipmentViewLink,
         syncAttackDamageBonusControls,
